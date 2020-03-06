@@ -13,5 +13,6 @@ using StatsBase
     include("prioritized_dqn.jl")
     include("rainbow.jl")
     include("A2C.jl")
+    include("A2CGAE.jl")
 
 end
