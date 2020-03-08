@@ -38,20 +38,19 @@ function RLBase.update!(learner::A2CGAELearner, experience)
     w₃ = learner.entropy_loss_weight
     states, actions, rewards, terminals, rollout = experience
     states = send_to_device(device(AC), states)
+    rollout = reshape(rollout,: , size(rollout,2)*size(rollout,3))
     rollout = send_to_device(device(AC), rollout)
 
     states_flattened = flatten_batch(states) # (state_size..., n_thread * update_step)
     actions = flatten_batch(actions)
     actions = CartesianIndex.(actions, 1:length(actions))
-    #terminals = Bool.(hcat(zeros(size(terminals,1)) , terminals))
 
-    reshape(rollout,: , size(rollout,2)*size(rollout,3))
-    rollout_values = AC(x, Val(:V))
-    reshape(rollout_values,size(states,2),size(states,3)+1)
+    rollout_values = AC(rollout, Val(:V))
+    rollout_values = reshape(rollout_values,size(states,2),size(states,3)+1)
 
-    gains = gae_returns(
+    gains = generalized_advantage_estimation(
         rewards,
-        rollout_values[1],
+        rollout_values,
         γ,
         λ;
         dims = 2,
