@@ -45,6 +45,4 @@
     )
     hook = TotalBatchRewardPerEpisode(N_ENV)
     run(agent, env, StopAfterStep(10000), hook)
-    print(hook.reward)
-
 end

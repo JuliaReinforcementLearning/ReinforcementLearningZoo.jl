@@ -36,20 +36,25 @@ function RLBase.update!(learner::A2CGAELearner, experience)
     w₁ = learner.actor_loss_weight
     w₂ = learner.critic_loss_weight
     w₃ = learner.entropy_loss_weight
-    states, actions, rewards, terminals, next_state = experience
+    states, actions, rewards, terminals, rollout = experience
     states = send_to_device(device(AC), states)
-    next_state = send_to_device(device(AC), next_state)
+    rollout = send_to_device(device(AC), rollout)
 
     states_flattened = flatten_batch(states) # (state_size..., n_thread * update_step)
     actions = flatten_batch(actions)
     actions = CartesianIndex.(actions, 1:length(actions))
+    #terminals = Bool.(hcat(zeros(size(terminals,1)) , terminals))
 
-    next_state_values = AC(next_state, Val(:V))
-    gains = discount_rewards(
+    reshape(rollout,: , size(rollout,2)*size(rollout,3))
+    rollout_values = AC(x, Val(:V))
+    reshape(rollout_values,size(states,2),size(states,3)+1)
+
+    gains = gae_returns(
         rewards,
-        γ*λ;  # discounting the advantage estimation by λγ
+        rollout_values[1],
+        γ,
+        λ;
         dims = 2,
-        init = send_to_host(next_state_values),
         terminal = terminals,
     )
     gains = send_to_device(device(AC), gains)
@@ -75,8 +80,8 @@ function RLBase.extract_experience(t::CircularCompactSARTSATrajectory, learner::
             states = get_trace(t, :state),
             actions = get_trace(t, :action),
             rewards = get_trace(t, :reward),
-            terminals = get_trace(t, :terminal),
-            next_state = select_last_frame(get_trace(t, :next_state)),
+            terminals = t[:terminal],
+            rollout = t[:state],
         )
     else
         nothing
