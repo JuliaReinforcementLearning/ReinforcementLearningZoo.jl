@@ -8,11 +8,11 @@ using StatsBase
 
 @testset "ReinforcementLearningZoo.jl" begin
 
-    # include("basic_dqn.jl")
-    # include("dqn.jl")
-    # include("prioritized_dqn.jl")
-    # include("rainbow.jl")
-    # include("A2C.jl")
+    include("basic_dqn.jl")
+    include("dqn.jl")
+    include("prioritized_dqn.jl")
+    include("rainbow.jl")
+    include("A2C.jl")
     include("ppo.jl")
 
 end
