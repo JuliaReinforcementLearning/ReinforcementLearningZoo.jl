@@ -7,6 +7,7 @@ using Flux
 # Keyword arguments
 - `approximator`, an [`ActorCritic`](@ref) based [`NeuralNetworkApproximator`](@ref)
 - `γ::Float32`, reward discount rate.
+- 'λ::Float32', lambda for GAE-lambda
 - `actor_loss_weight::Float32`
 - `critic_loss_weight::Float32`
 - `entropy_loss_weight::Float32`
