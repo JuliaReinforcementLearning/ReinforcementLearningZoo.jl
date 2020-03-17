@@ -1,3 +1,5 @@
+export DDPGPolicy
+
 mutable struct DDPGPolicy{B, T, P, R} <: AbstractPolicy
     behavior_approximator::B
     target_approximator::T
