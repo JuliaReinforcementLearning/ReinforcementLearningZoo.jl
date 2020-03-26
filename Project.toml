@@ -15,7 +15,7 @@ Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 Flux = "0.10"
 ReinforcementLearningBase = "0.6"
 ReinforcementLearningCore = "0.2"
-StatsBase = "0.32"
+StatsBase = "0.32, 0.33"
 Zygote = "0.4"
 julia = "1.3"
 
