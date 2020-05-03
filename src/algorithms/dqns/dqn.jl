@@ -84,7 +84,7 @@ end
         send_to_device(device(learner.approximator), x) |> learner.approximator |>
         send_to_host
 
-function RLBase.update!(learner::DQNLearner, batch)
+function RLBase.update!(learner::DQNLearner, batch::NamedTuple)
     learner.update_step += 1
     learner.update_step % learner.update_freq == 0 || return nothing
 
@@ -114,7 +114,7 @@ function RLBase.update!(learner::DQNLearner, batch)
     end
 end
 
-function RLBase.extract_experience(t::AbstractTrajectory, learner::DQNLearner)
+function RLCore.extract_experience(t::AbstractTrajectory, learner::DQNLearner)
     s = learner.stack_size
     h = learner.update_horizon
     n = learner.batch_size

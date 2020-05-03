@@ -9,7 +9,7 @@
                         Dense(ns, 128, relu; initW = seed_glorot_uniform(seed = 17)),
                         Dense(128, 128, relu; initW = seed_glorot_uniform(seed = 23)),
                         Dense(128, na; initW = seed_glorot_uniform(seed = 39)),
-                    ) |> gpu,
+                    ) |> cpu,
                     optimizer = ADAM(),
                 ),
                 batch_size = 32,

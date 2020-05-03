@@ -54,7 +54,7 @@ function BasicDQNLearner(;
     )
 end
 
-function RLBase.update!(learner::BasicDQNLearner, batch)
+function RLBase.update!(learner::BasicDQNLearner, batch::NamedTuple)
     Q, γ, loss_func, batch_size =
         learner.approximator, learner.γ, learner.loss_func, learner.batch_size
     s, r, t, s′ = map(
@@ -64,8 +64,8 @@ function RLBase.update!(learner::BasicDQNLearner, batch)
     a = CartesianIndex.(batch.action, 1:batch_size)
 
     gs = gradient(params(Q)) do
-        q = batch_estimate(Q, s)[a]
-        q′ = vec(maximum(batch_estimate(Q, s′); dims = 1))
+        q = Q(s)[a]
+        q′ = vec(maximum(Q(s′); dims = 1))
         G = r .+ γ .* (1 .- t) .* q′
         loss_func(G, q)
     end
@@ -73,7 +73,7 @@ function RLBase.update!(learner::BasicDQNLearner, batch)
     update!(Q, gs)
 end
 
-function RLBase.extract_experience(
+function RLCore.extract_experience(
     t::CircularCompactSARTSATrajectory,
     learner::BasicDQNLearner,
 )

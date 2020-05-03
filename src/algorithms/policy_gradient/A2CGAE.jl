@@ -79,7 +79,7 @@ function RLBase.update!(learner::A2CGAELearner, experience)
     update!(AC, gs)
 end
 
-function RLBase.extract_experience(
+function extract_experience(
     t::CircularCompactSARTSATrajectory,
     learner::A2CGAELearner,
 )

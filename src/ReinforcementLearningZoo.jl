@@ -1,5 +1,8 @@
 module ReinforcementLearningZoo
 
+const RLZoo = ReinforcementLearningZoo
+export RLZoo
+
 using ReinforcementLearningBase
 using ReinforcementLearningCore
 

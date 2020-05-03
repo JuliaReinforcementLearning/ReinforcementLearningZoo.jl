@@ -203,7 +203,7 @@ function project_distribution(supports, weights, target_support, delta_z, vmin, 
     reshape(sum(projection, dims = 1), n_atoms, batch_size)
 end
 
-function RLBase.extract_experience(t::AbstractTrajectory, learner::RainbowLearner)
+function RLCore.extract_experience(t::AbstractTrajectory, learner::RainbowLearner)
     s = learner.stack_size
     h = learner.update_horizon
     n = learner.batch_size
