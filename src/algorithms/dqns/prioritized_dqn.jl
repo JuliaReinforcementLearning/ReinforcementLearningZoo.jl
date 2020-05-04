@@ -112,8 +112,8 @@ function RLBase.update!(learner::PrioritizedDQNLearner, batch)
     priorities = send_to_device(device(Q), Vector{Float32}())
 
     gs = gradient(params(Q)) do
-        q = batch_estimate(Q, states)[actions]
-        q′ = dropdims(maximum(batch_estimate(Qₜ, next_states); dims = 1), dims = 1)
+        q = Q(states)[actions]
+        q′ = dropdims(maximum(Qₜ(next_states); dims = 1), dims = 1)
         G = rewards .+ γ^update_horizon .* (1 .- terminals) .* q′
 
         batch_losses = loss_func(G, q)

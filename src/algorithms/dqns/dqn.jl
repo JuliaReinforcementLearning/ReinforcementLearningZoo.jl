@@ -101,8 +101,8 @@ function RLBase.update!(learner::DQNLearner, batch::NamedTuple)
     actions = CartesianIndex.(batch.actions, 1:batch_size)
 
     gs = gradient(params(Q)) do
-        q = batch_estimate(Q, states)[actions]
-        q′ = dropdims(maximum(batch_estimate(Qₜ, next_states); dims = 1), dims = 1)
+        q = Q(states)[actions]
+        q′ = dropdims(maximum(Qₜ(next_states); dims = 1), dims = 1)
         G = rewards .+ γ^update_horizon .* (1 .- terminals) .* q′
         loss_func(G, q)
     end

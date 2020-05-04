@@ -109,7 +109,7 @@ end
 
 function (learner::RainbowLearner)(obs)
     state = send_to_device(device(learner.approximator), get_state(obs))
-    logits = batch_estimate(learner.approximator, state)
+    logits = learner.approximator(state)
     q = learner.support .* softmax(reshape(logits, :, learner.n_actions))
     # probs = vec(sum(q, dims=1)) .+ legal_action
     vec(sum(q, dims = 1)) |> send_to_host
@@ -142,7 +142,7 @@ function RLBase.update!(learner::RainbowLearner, batch)
 
     updated_priorities = send_to_device(device(Q), Vector{Float32}())
 
-    next_logits = batch_estimate(Qₜ, next_states)
+    next_logits = Qₜ(next_states)
     next_probs = reshape(softmax(reshape(next_logits, n_atoms, :)), n_atoms, n_actions, :)
     next_q = reshape(sum(support .* next_probs, dims = 1), n_actions, :)
     # next_q_argmax = argmax(cpu(next_q .+ next_legal_actions), dims=1)
@@ -158,7 +158,7 @@ function RLBase.update!(learner::RainbowLearner, batch)
     )
 
     gs = gradient(Flux.params(Q)) do
-        logits = reshape(batch_estimate(Q, states), n_atoms, n_actions, :)
+        logits = reshape(Q(states), n_atoms, n_actions, :)
         select_logits = logits[:, actions]
         batch_losses = loss_func(select_logits, target_distribution)
 
