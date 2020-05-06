@@ -13,7 +13,7 @@ Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [compat]
 Flux = "0.10"
-ReinforcementLearningBase = "0.6"
+ReinforcementLearningBase = "0.6, 0.7"
 ReinforcementLearningCore = "0.2"
 StatsBase = "0.32"
 Zygote = "0.4"
