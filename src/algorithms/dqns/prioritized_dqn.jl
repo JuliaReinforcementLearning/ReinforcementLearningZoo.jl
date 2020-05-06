@@ -178,7 +178,7 @@ function RLCore.extract_experience(t::AbstractTrajectory, learner::PrioritizedDQ
 end
 
 function RLBase.update!(p::QBasedPolicy{<:PrioritizedDQNLearner}, t::AbstractTrajectory)
-    indexed_experience = extract_experience(t, p)
+    indexed_experience = extract_experience(t, p.learner)
     if !isnothing(indexed_experience)
         inds, experience = indexed_experience
         priorities = update!(p.learner, experience)

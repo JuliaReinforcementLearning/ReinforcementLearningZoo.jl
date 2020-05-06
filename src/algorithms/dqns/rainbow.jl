@@ -162,9 +162,11 @@ function RLBase.update!(learner::RainbowLearner, batch)
         select_logits = logits[:, actions]
         batch_losses = loss_func(select_logits, target_distribution)
 
-        updated_priorities = vec(clamp.(sqrt.(batch_losses .+ 1f-10), 1.f0, 1.f2))
-        target_priorities = 1.0f0 ./ sqrt.(updated_priorities .+ 1f-10)
-        normalized_target_priorities = target_priorities ./ maximum(target_priorities)
+        normalized_target_priorities = ignore() do
+            updated_priorities = vec(clamp.(sqrt.(batch_losses .+ 1f-10), 1.f0, 1.f2))
+            target_priorities = 1.0f0 ./ sqrt.(updated_priorities .+ 1f-10)
+            target_priorities ./ maximum(target_priorities)
+        end
 
         mean(Zygote.dropgrad(normalized_target_priorities) .* batch_losses)
     end
@@ -251,7 +253,7 @@ function RLCore.extract_experience(t::AbstractTrajectory, learner::RainbowLearne
 end
 
 function RLBase.update!(p::QBasedPolicy{<:RainbowLearner}, t::AbstractTrajectory)
-    indexed_experience = extract_experience(t, p)
+    indexed_experience = extract_experience(t, p.learner)
     if !isnothing(indexed_experience)
         inds, experience = indexed_experience
         priorities = update!(p.learner, experience)
