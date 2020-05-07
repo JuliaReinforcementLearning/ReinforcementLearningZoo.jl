@@ -23,7 +23,7 @@
                         ),
                         optimizer = ADAM(1e-3)
                     ),
-                ) |> gpu,
+                ) |> cpu,
                 γ = 0.99f0,
                 actor_loss_weight = 1.0f0,
                 critic_loss_weight = 0.5f0,

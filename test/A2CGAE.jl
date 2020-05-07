@@ -7,21 +7,23 @@
     agent = Agent(
         policy = QBasedPolicy(
             learner = A2CGAELearner(
-                approximator = NeuralNetworkApproximator(
-                    model = ActorCritic(
-                        actor = Chain(
+                approximator = ActorCritic(
+                    actor = NeuralNetworkApproximator(
+                        model = Chain(
                             Dense(ns, 256, relu; initW = seed_glorot_uniform(seed = 17)),
                             Dense(256, na; initW = seed_glorot_uniform(seed = 23)),
                             softmax,
                         ),
-                        critic = Chain(
+                        optimizer = ADAM(1e-3)
+                    ),
+                    critic = NeuralNetworkApproximator(
+                        model = Chain(
                             Dense(ns, 256, relu; initW = seed_glorot_uniform(seed = 29)),
                             Dense(256, 1; initW = seed_glorot_uniform(seed = 29)),
                         ),
-                    ) |> gpu,
-                    optimizer = ADAM(1e-3),
-                    kind = HYBRID_APPROXIMATOR,
-                ),
+                        optimizer = ADAM(1e-3)
+                    ),
+                ) |> cpu,
                 γ = 0.99f0,
                 λ = 0.97f0,
                 actor_loss_weight = 1.0f0,

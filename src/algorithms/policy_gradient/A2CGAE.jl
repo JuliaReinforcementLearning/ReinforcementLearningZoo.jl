@@ -12,7 +12,7 @@ using Flux
 - `critic_loss_weight::Float32`
 - `entropy_loss_weight::Float32`
 """
-Base.@kwdef struct A2CGAELearner{A} <: AbstractLearner
+Base.@kwdef struct A2CGAELearner{A<:ActorCritic} <: AbstractLearner
     approximator::A
     γ::Float32
     λ::Float32
@@ -21,13 +21,9 @@ Base.@kwdef struct A2CGAELearner{A} <: AbstractLearner
     entropy_loss_weight::Float32
 end
 
-(learner::A2CGAELearner)(obs::BatchObs) =
-    learner.approximator(
-        send_to_device(device(learner.approximator), get_state(obs)),
-        Val(:Q),
-    ) |> send_to_host
+(learner::A2CGAELearner)(obs::BatchObs) = learner.approximator.actor(send_to_device(device(learner.approximator), get_state(obs))) |> send_to_host
 
-function RLBase.update!(learner::A2CGAELearner, experience)
+function RLBase.update!(learner::A2CGAELearner, experience::NamedTuple)
     AC = learner.approximator
     γ = learner.γ
     λ = learner.λ
@@ -43,7 +39,7 @@ function RLBase.update!(learner::A2CGAELearner, experience)
     actions = flatten_batch(actions)
     actions = CartesianIndex.(actions, 1:length(actions))
 
-    rollout_values = AC(rollout, Val(:V))
+    rollout_values = AC.critic(rollout)
     rollout_values = send_to_host(rollout_values)
     rollout_values = reshape(
         rollout_values,
@@ -65,10 +61,10 @@ function RLBase.update!(learner::A2CGAELearner, experience)
     advantages = send_to_device(device(AC), advantages)
 
     gs = gradient(Flux.params(AC)) do
-        probs = AC(states_flattened, Val(:Q))
+        probs = AC.actor(states_flattened)
         log_probs = log.(probs)
         log_probs_select = log_probs[actions]
-        values = AC(states_flattened, Val(:V))
+        values = AC.critic(states_flattened)
         advantage = vec(gains) .- vec(values)
         actor_loss = -mean(log_probs_select .* advantages)
         critic_loss = mean(advantage .^ 2)

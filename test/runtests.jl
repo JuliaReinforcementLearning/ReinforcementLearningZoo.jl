@@ -9,9 +9,9 @@ using StatsBase
 @testset "ReinforcementLearningZoo.jl" begin
 
     include("basic_dqn.jl")
-    # include("dqn.jl")
-    # include("prioritized_dqn.jl")
-    # include("rainbow.jl")
-    # include("A2C.jl")
-    # include("A2CGAE.jl")
+    include("dqn.jl")
+    include("prioritized_dqn.jl")
+    include("rainbow.jl")
+    include("A2C.jl")
+    include("A2CGAE.jl")
 end
