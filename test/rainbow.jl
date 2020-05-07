@@ -10,7 +10,7 @@
                         Dense(ns, 128, relu; initW = seed_glorot_uniform(seed = 17)),
                         Dense(128, 128, relu; initW = seed_glorot_uniform(seed = 23)),
                         Dense(128, na * n_atoms; initW = seed_glorot_uniform(seed = 39)),
-                    ) |> cpu,
+                    ) |> gpu,
                     optimizer = ADAM(0.0005),
                 ),
                 target_approximator = NeuralNetworkApproximator(
@@ -18,7 +18,7 @@
                         Dense(ns, 128, relu; initW = seed_glorot_uniform(seed = 17)),
                         Dense(128, 128, relu; initW = seed_glorot_uniform(seed = 23)),
                         Dense(128, na * n_atoms; initW = seed_glorot_uniform(seed = 39)),
-                    ) |> cpu,
+                    ) |> gpu,
                     optimizer = ADAM(0.0005),
                 ),
                 n_actions = na,

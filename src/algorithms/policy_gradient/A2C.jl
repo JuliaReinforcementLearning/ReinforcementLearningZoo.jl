@@ -1,35 +1,19 @@
-export A2CLearner, ActorCritic
+export A2CLearner
 
 using Flux
-
-"""
-    ActorCritic(actor, critic)
-
-The `actor` part must return a **normalized** vector representing the action values,
-and the `critic` part must return a state value.
-"""
-Base.@kwdef struct ActorCritic{A,C}
-    actor::A
-    critic::C
-end
-
-Flux.@functor ActorCritic
-
-(m::ActorCritic)(s::AbstractArray, ::Val{:Q}) = m.actor(s)
-(m::ActorCritic)(s::AbstractArray, ::Val{:V}) = m.critic(s)
 
 """
     A2CLearner(;kwargs...)
 
 # Keyword arguments
 
-- `approximator`, an [`ActorCritic`](@ref) based [`NeuralNetworkApproximator`](@ref)
+- `approximator`::[`ActorCritic`](@ref)
 - `γ::Float32`, reward discount rate.
 - `actor_loss_weight::Float32`
 - `critic_loss_weight::Float32`
 - `entropy_loss_weight::Float32`
 """
-Base.@kwdef struct A2CLearner{A} <: AbstractLearner
+Base.@kwdef struct A2CLearner{A<:ActorCritic} <: AbstractLearner
     approximator::A
     γ::Float32
     actor_loss_weight::Float32
@@ -37,13 +21,9 @@ Base.@kwdef struct A2CLearner{A} <: AbstractLearner
     entropy_loss_weight::Float32
 end
 
-(learner::A2CLearner)(obs::BatchObs) =
-    learner.approximator(
-        send_to_device(device(learner.approximator), get_state(obs)),
-        Val(:Q),
-    ) |> send_to_host
+(learner::A2CLearner)(obs::BatchObs) = learner.approximator.actor(send_to_device(device(learner.approximator), get_state(obs))) |> send_to_host
 
-function RLBase.update!(learner::A2CLearner, experience)
+function RLBase.update!(learner::A2CLearner, experience::NamedTuple)
     AC = learner.approximator
     γ = learner.γ
     w₁ = learner.actor_loss_weight
@@ -57,7 +37,7 @@ function RLBase.update!(learner::A2CLearner, experience)
     actions = flatten_batch(actions)
     actions = CartesianIndex.(actions, 1:length(actions))
 
-    next_state_values = AC(next_state, Val(:V))
+    next_state_values = AC.critic(next_state)
     gains = discount_rewards(
         rewards,
         γ;
@@ -68,10 +48,10 @@ function RLBase.update!(learner::A2CLearner, experience)
     gains = send_to_device(device(AC), gains)
 
     gs = gradient(Flux.params(AC)) do
-        probs = AC(states_flattened, Val(:Q))
+        probs = AC.actor(states_flattened)
         log_probs = log.(probs)
         log_probs_select = log_probs[actions]
-        values = AC(states_flattened, Val(:V))
+        values = AC.critic(states_flattened)
         advantage = vec(gains) .- vec(values)
         actor_loss = -mean(log_probs_select .* Zygote.dropgrad(advantage))
         critic_loss = mean(advantage .^ 2)
