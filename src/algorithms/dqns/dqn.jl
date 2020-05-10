@@ -2,6 +2,7 @@ export DQNLearner
 
 using Random
 using Flux
+using Setfield: @set
 
 """
     DQNLearner(;kwargs...)
@@ -70,6 +71,13 @@ function DQNLearner(;
         update_step,
         rng,
     )
+end
+
+
+Flux.functor(x::DQNLearner) = (Q = x.approximator, Qₜ = x.target_approximator), y -> begin
+    x = @set x.approximator = y.Q
+    x = @set x.target_approximator = y.Qₜ
+    x
 end
 
 """
