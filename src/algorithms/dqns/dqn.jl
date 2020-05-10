@@ -79,10 +79,13 @@ end
     if `!isnothing(stack_size)`.
 """
 (learner::DQNLearner)(obs) =
-    obs |> get_state |>
-    x ->
-        send_to_device(device(learner.approximator), x) |> learner.approximator |>
-        send_to_host
+    obs |>
+    get_state |>
+    x -> Flux.unsqueeze(x, ndims(x)+1) |>
+    x -> send_to_device(device(learner.approximator), x) |>
+    learner.approximator |>
+    send_to_host |>
+    Flux.squeezebatch
 
 function RLBase.update!(learner::DQNLearner, batch::NamedTuple)
     learner.update_step += 1
@@ -119,7 +122,7 @@ function RLCore.extract_experience(t::AbstractTrajectory, learner::DQNLearner)
     h = learner.update_horizon
     n = learner.batch_size
     γ = learner.γ
-    valid_ind_range = isnothing(s) ? (1:(length(t)-h)) : (s:(1:(length(t)-h)))
+    valid_ind_range = isnothing(s) ? (1:(length(t)-h)) : (s:(length(t)-h))
     if length(t) > learner.min_replay_history
         inds = rand(learner.rng, valid_ind_range, n)
         states = consecutive_view(get_trace(t, :state), inds; n_stack = s)

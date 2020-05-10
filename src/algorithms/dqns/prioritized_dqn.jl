@@ -138,7 +138,7 @@ function RLCore.extract_experience(t::AbstractTrajectory, learner::PrioritizedDQ
     if length(t) > learner.min_replay_history
         # 1. sample indices based on priority
         inds = Vector{Int}(undef, n)
-        valid_ind_range = isnothing(s) ? (1:(length(t)-h)) : (s:(1:(length(t)-h)))
+        valid_ind_range = isnothing(s) ? (1:(length(t)-h)) : (s:(length(t)-h))
         for i in 1:n
             ind, p = sample(learner.rng, get_trace(t, :priority))
             while ind ∉ valid_ind_range
