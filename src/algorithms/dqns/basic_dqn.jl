@@ -20,13 +20,14 @@ You can start from this implementation to understand how everything is organized
 - `min_replay_history::Int=32`: number of transitions that should be experienced before updating the `approximator`.
 - `seed=nothing`.
 """
-struct BasicDQNLearner{Q,F,R} <: AbstractLearner
+mutable struct BasicDQNLearner{Q,F,R} <: AbstractLearner
     approximator::Q
     loss_func::F
     γ::Float32
     batch_size::Int
     min_replay_history::Int
     rng::R
+    loss::Float32
 end
 
 (learner::BasicDQNLearner)(obs) =
@@ -51,6 +52,7 @@ function BasicDQNLearner(;
         batch_size,
         min_replay_history,
         rng,
+        0.
     )
 end
 
@@ -67,7 +69,11 @@ function RLBase.update!(learner::BasicDQNLearner, batch::NamedTuple)
         q = Q(s)[a]
         q′ = vec(maximum(Q(s′); dims = 1))
         G = r .+ γ .* (1 .- t) .* q′
-        loss_func(G, q)
+        loss = loss_func(G, q)
+        ignore() do
+            learner.loss = loss
+        end
+        loss
     end
 
     update!(Q, gs)
