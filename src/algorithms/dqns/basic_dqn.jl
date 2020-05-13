@@ -79,7 +79,7 @@ function RLBase.update!(learner::BasicDQNLearner, batch::NamedTuple)
     update!(Q, gs)
 end
 
-function RLCore.extract_experience(
+function extract_experience(
     t::CircularCompactSARTSATrajectory,
     learner::BasicDQNLearner,
 )

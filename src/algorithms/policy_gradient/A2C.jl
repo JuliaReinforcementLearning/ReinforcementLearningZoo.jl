@@ -62,7 +62,7 @@ function RLBase.update!(learner::A2CLearner, experience::NamedTuple)
     update!(AC, gs)
 end
 
-function RLCore.extract_experience(t::CircularCompactSARTSATrajectory, learner::A2CLearner)
+function extract_experience(t::CircularCompactSARTSATrajectory, learner::A2CLearner)
     if isfull(t)
         (
             states = get_trace(t, :state),

@@ -130,7 +130,7 @@ function RLBase.update!(learner::PrioritizedDQNLearner, batch)
     send_to_host(priorities)
 end
 
-function RLCore.extract_experience(t::AbstractTrajectory, learner::PrioritizedDQNLearner)
+function extract_experience(t::AbstractTrajectory, learner::PrioritizedDQNLearner)
     s = learner.stack_size
     h = learner.update_horizon
     n = learner.batch_size

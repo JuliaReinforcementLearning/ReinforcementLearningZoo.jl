@@ -75,7 +75,7 @@ function RLBase.update!(learner::A2CGAELearner, experience::NamedTuple)
     update!(AC, gs)
 end
 
-function RLCore.extract_experience(
+function extract_experience(
     t::CircularCompactSARTSATrajectory,
     learner::A2CGAELearner,
 )
