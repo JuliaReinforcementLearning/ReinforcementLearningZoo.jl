@@ -56,7 +56,14 @@ function BasicDQNLearner(;
     )
 end
 
-function RLBase.update!(learner::BasicDQNLearner, batch::NamedTuple)
+function RLBase.update!(learner::BasicDQNLearner, t::AbstractTrajectory)
+    length(t) < learner.min_replay_history && return
+
+    inds = rand(learner.rng, 1:length(t), learner.batch_size)
+    batch = map(get_trace(t, :state, :action, :reward, :terminal, :next_state)) do x
+        consecutive_view(x, inds)
+    end
+
     Q, γ, loss_func, batch_size =
         learner.approximator, learner.γ, learner.loss_func, learner.batch_size
     s, r, t, s′ = map(
@@ -77,18 +84,4 @@ function RLBase.update!(learner::BasicDQNLearner, batch::NamedTuple)
     end
 
     update!(Q, gs)
-end
-
-function extract_experience(
-    t::CircularCompactSARTSATrajectory,
-    learner::BasicDQNLearner,
-)
-    if length(t) > learner.min_replay_history
-        inds = rand(learner.rng, 1:length(t), learner.batch_size)
-        map(get_trace(t, :state, :action, :reward, :terminal, :next_state)) do x
-            consecutive_view(x, inds)
-        end
-    else
-        nothing
-    end
 end

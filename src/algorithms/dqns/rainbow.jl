@@ -210,57 +210,60 @@ function extract_experience(t::AbstractTrajectory, learner::RainbowLearner)
     h = learner.update_horizon
     n = learner.batch_size
     γ = learner.γ
-    if length(t) > learner.min_replay_history
-        # 1. sample indices based on priority
-        inds = Vector{Int}(undef, n)
-        valid_ind_range = isnothing(s) ? (1:(length(t)-h)) : (s:(length(t)-h))
-        for i in 1:n
+
+    # 1. sample indices based on priority
+    inds = Vector{Int}(undef, n)
+    valid_ind_range = isnothing(s) ? (1:(length(t)-h)) : (s:(length(t)-h))
+    for i in 1:n
+        ind, p = sample(learner.rng, get_trace(t, :priority))
+        while ind ∉ valid_ind_range
             ind, p = sample(learner.rng, get_trace(t, :priority))
-            while ind ∉ valid_ind_range
-                ind, p = sample(learner.rng, get_trace(t, :priority))
-            end
-            inds[i] = ind
         end
-
-        # 2. extract SARTS
-        states = consecutive_view(get_trace(t, :state), inds; n_stack = s)
-        actions = consecutive_view(get_trace(t, :action), inds)
-        next_states = consecutive_view(get_trace(t, :state), inds .+ h; n_stack = s)
-        consecutive_rewards = consecutive_view(get_trace(t, :reward), inds; n_horizon = h)
-        consecutive_terminals =
-            consecutive_view(get_trace(t, :terminal), inds; n_horizon = h)
-        rewards, terminals = zeros(Float32, n), fill(false, n)
-
-        rewards = discount_rewards_reduced(
-            consecutive_rewards,
-            γ;
-            terminal = consecutive_terminals,
-            dims = 1,
-        )
-        terminals = mapslices(any, consecutive_terminals; dims = 1) |> vec
-
-        inds,
-        (
-            states = states,
-            actions = actions,
-            rewards = rewards,
-            terminals = terminals,
-            next_states = next_states,
-        )
-    else
-        nothing
+        inds[i] = ind
     end
+
+    # 2. extract SARTS
+    states = consecutive_view(get_trace(t, :state), inds; n_stack = s)
+    actions = consecutive_view(get_trace(t, :action), inds)
+    next_states = consecutive_view(get_trace(t, :state), inds .+ h; n_stack = s)
+    consecutive_rewards = consecutive_view(get_trace(t, :reward), inds; n_horizon = h)
+    consecutive_terminals =
+        consecutive_view(get_trace(t, :terminal), inds; n_horizon = h)
+    rewards, terminals = zeros(Float32, n), fill(false, n)
+
+    rewards = discount_rewards_reduced(
+        consecutive_rewards,
+        γ;
+        terminal = consecutive_terminals,
+        dims = 1,
+    )
+    terminals = mapslices(any, consecutive_terminals; dims = 1) |> vec
+
+    inds,
+    (
+        states = Array(states),
+        actions = actions,
+        rewards = rewards,
+        terminals = terminals,
+        next_states = Array(next_states),
+    )
 end
 
 function RLBase.update!(p::QBasedPolicy{<:RainbowLearner}, t::AbstractTrajectory)
-    indexed_experience = extract_experience(t, p.learner)
-    if !isnothing(indexed_experience)
-        inds, experience = indexed_experience
-        priorities = update!(p.learner, experience)
-        if !isnothing(priorities)
-            get_trace(t, :priority)[inds] .= priorities
-        end
+    length(t) < learner.min_replay_history && return
+
+    learner.update_step += 1
+    learner.update_step % learner.update_freq == 0 || return
+
+    if haskey(EXPERIENCE_CACHE, learner)
+        inds, experience = EXPERIENCE_CACHE[learner]
+    else
+        inds, experience = extract_experience(t, p.learner)
     end
+    task = Threads.@spawn EXPERIENCE_CACHE[learner] = extract_experience(t, learner)
+    priorities = update!(p.learner, experience)
+    wait(task)
+    get_trace(t, :priority)[inds] .= priorities
 end
 
 function (

@@ -95,8 +95,6 @@ end
     send_to_host |>
     Flux.squeezebatch
 
-const EXPERIENCE_CACHE = IdDict()
-
 function RLBase.update!(learner::DQNLearner, t::AbstractTrajectory)
     length(t) < learner.min_replay_history && return
 
