@@ -6,8 +6,6 @@ export RLZoo
 using ReinforcementLearningBase
 using ReinforcementLearningCore
 
-const EXPERIENCE_CACHE = IdDict()
-
 include("patch.jl")
 include("algorithms/algorithms.jl")
 

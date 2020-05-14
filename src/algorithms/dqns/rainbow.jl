@@ -241,11 +241,11 @@ function extract_experience(t::AbstractTrajectory, learner::RainbowLearner)
 
     inds,
     (
-        states = Array(states),
+        states = states,
         actions = actions,
         rewards = rewards,
         terminals = terminals,
-        next_states = Array(next_states),
+        next_states = next_states,
     )
 end
 
@@ -255,14 +255,8 @@ function RLBase.update!(p::QBasedPolicy{<:RainbowLearner}, t::AbstractTrajectory
     learner.update_step += 1
     learner.update_step % learner.update_freq == 0 || return
 
-    if haskey(EXPERIENCE_CACHE, learner)
-        inds, experience = EXPERIENCE_CACHE[learner]
-    else
-        inds, experience = extract_experience(t, p.learner)
-    end
-    task = Threads.@spawn EXPERIENCE_CACHE[learner] = extract_experience(t, learner)
+    inds, experience = extract_experience(t, p.learner)
     priorities = update!(p.learner, experience)
-    wait(task)
     get_trace(t, :priority)[inds] .= priorities
 end
 

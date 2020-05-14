@@ -56,8 +56,10 @@ function RLCore.Experiment(::Val{:juliarl}, ::Val{:BasicDQN}, ::Val{:CartPole}, 
         total_reward_per_episode,
         time_per_step,
         DoEveryNStep() do t, agent, env, obs
-            with_logger(lg) do
-                @info "training" loss=agent.policy.learner.loss
+            if agent.policy.learner.update_step % agent.policy.learner.update_freq == 0
+                with_logger(lg) do
+                    @info "training" loss=agent.policy.learner.loss
+                end
             end
         end,
         DoEveryNStep(10000) do t, agent, env, obs

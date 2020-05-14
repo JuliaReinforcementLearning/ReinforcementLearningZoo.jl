@@ -39,6 +39,7 @@ mutable struct DQNLearner{
     target_update_freq::Int
     update_step::Int
     rng::R
+    loss::Float32
 end
 
 function DQNLearner(;
@@ -70,6 +71,7 @@ function DQNLearner(;
         target_update_freq,
         update_step,
         rng,
+        0.f0
     )
 end
 
@@ -101,13 +103,7 @@ function RLBase.update!(learner::DQNLearner, t::AbstractTrajectory)
     learner.update_step += 1
     learner.update_step % learner.update_freq == 0 || return
 
-    if haskey(EXPERIENCE_CACHE, learner)
-        experience = EXPERIENCE_CACHE[learner]
-    else
-        experience = extract_experience(t, learner)
-    end
-
-    task = Threads.@spawn EXPERIENCE_CACHE[learner] = extract_experience(t, learner)
+    experience = extract_experience(t, learner)
 
     Q = learner.approximator
     Qₜ = learner.target_approximator
@@ -126,7 +122,11 @@ function RLBase.update!(learner::DQNLearner, t::AbstractTrajectory)
         q = Q(states)[actions]
         q′ = dropdims(maximum(Qₜ(next_states); dims = 1), dims = 1)
         G = rewards .+ γ^update_horizon .* (1 .- terminals) .* q′
-        loss_func(G, q)
+        loss = loss_func(G, q)
+        ignore() do
+            learner.loss = loss
+        end
+        loss
     end
 
     update!(Q, gs)
@@ -134,8 +134,6 @@ function RLBase.update!(learner::DQNLearner, t::AbstractTrajectory)
     if learner.update_step % learner.target_update_freq == 0
         copyto!(Qₜ, Q)
     end
-
-    wait(task)
 end
 
 function extract_experience(t::AbstractTrajectory, learner::DQNLearner)
@@ -166,10 +164,10 @@ function extract_experience(t::AbstractTrajectory, learner::DQNLearner)
         end
     end
     (
-        states = Array(states),
+        states = states,
         actions = actions,
         rewards = rewards,
         terminals = terminals,
-        next_states = Array(next_states),
+        next_states = next_states,
     )
 end
