@@ -23,14 +23,22 @@ end
 
 (learner::A2CGAELearner)(obs::BatchObs) = learner.approximator.actor(send_to_device(device(learner.approximator), get_state(obs))) |> send_to_host
 
-function RLBase.update!(learner::A2CGAELearner, experience::NamedTuple)
+function RLBase.update!(learner::A2CGAELearner, t::AbstractTrajectory)
+    isfull(t) || return
+
+    states = get_trace(t, :state)
+    actions = get_trace(t, :action)
+    rewards = get_trace(t, :reward)
+    terminals = get_trace(t, :terminal)
+    rollout = t[:state]
+
     AC = learner.approximator
     γ = learner.γ
     λ = learner.λ
     w₁ = learner.actor_loss_weight
     w₂ = learner.critic_loss_weight
     w₃ = learner.entropy_loss_weight
-    states, actions, rewards, terminals, rollout = experience
+
     states = send_to_device(device(AC), states)
     rollout = flatten_batch(rollout)
     rollout = send_to_device(device(AC), rollout)
@@ -73,23 +81,6 @@ function RLBase.update!(learner::A2CGAELearner, experience::NamedTuple)
         loss
     end
     update!(AC, gs)
-end
-
-function extract_experience(
-    t::CircularCompactSARTSATrajectory,
-    learner::A2CGAELearner,
-)
-    if isfull(t)
-        (
-            states = get_trace(t, :state),
-            actions = get_trace(t, :action),
-            rewards = get_trace(t, :reward),
-            terminals = get_trace(t, :terminal),
-            rollout = t[:state],
-        )
-    else
-        nothing
-    end
 end
 
 function (agent::Agent{<:QBasedPolicy{<:A2CGAELearner},<:CircularCompactSARTSATrajectory})(

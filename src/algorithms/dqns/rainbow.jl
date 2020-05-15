@@ -58,6 +58,7 @@ mutable struct RainbowLearner{
     update_step::Int
     default_priority::Float64
     rng::R
+    loss::Float32
 end
 
 function RainbowLearner(;
@@ -104,6 +105,7 @@ function RainbowLearner(;
         update_step,
         default_priority,
         rng,
+        0.f0
     )
 end
 
@@ -168,7 +170,11 @@ function RLBase.update!(learner::RainbowLearner, batch)
             target_priorities ./ maximum(target_priorities)
         end
 
-        mean(Zygote.dropgrad(normalized_target_priorities) .* batch_losses)
+        loss = mean(Zygote.dropgrad(normalized_target_priorities) .* batch_losses)
+        ignore() do
+            learner.loss = loss
+        end
+        loss
     end
 
     update!(Q, gs)
@@ -250,6 +256,7 @@ function extract_experience(t::AbstractTrajectory, learner::RainbowLearner)
 end
 
 function RLBase.update!(p::QBasedPolicy{<:RainbowLearner}, t::AbstractTrajectory)
+    learner = p.learner
     length(t) < learner.min_replay_history && return
 
     learner.update_step += 1

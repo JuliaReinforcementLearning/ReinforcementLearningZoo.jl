@@ -45,6 +45,7 @@ mutable struct PrioritizedDQNLearner{
     update_step::Int
     default_priority::Float32
     rng::R
+    loss::Float32
 end
 
 function PrioritizedDQNLearner(;
@@ -78,6 +79,7 @@ function PrioritizedDQNLearner(;
         update_step,
         default_priority,
         rng,
+        0.f0
     )
 end
 
@@ -115,7 +117,11 @@ function RLBase.update!(learner::PrioritizedDQNLearner, batch)
 
         batch_losses = loss_func(G, q)
         priorities = (Zygote.dropgrad(batch_losses) .+ 1f-10)
-        mean(batch_losses)
+        loss = mean(batch_losses)
+        ignore() do
+            learner.loss = loss
+        end
+        loss
     end
 
     update!(Q, gs)
@@ -172,6 +178,7 @@ function extract_experience(t::AbstractTrajectory, learner::PrioritizedDQNLearne
 end
 
 function RLBase.update!(p::QBasedPolicy{<:PrioritizedDQNLearner}, t::AbstractTrajectory)
+    learner = p.learner
     length(t) < learner.min_replay_history && return
 
     learner.update_step += 1

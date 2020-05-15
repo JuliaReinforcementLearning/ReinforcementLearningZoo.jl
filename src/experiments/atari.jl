@@ -10,10 +10,10 @@ using TensorBoardLogger
 using Logging
 using Statistics
 
-function RLCore.Experiment(::Val{:dopamine}, ::Val{:DQN}, ::Val{:atari}, name::AbstractString; save_dir=nothing)
+function RLCore.Experiment(::Val{:Dopamine}, ::Val{:DQN}, ::Val{:Atari}, name::AbstractString; save_dir=nothing)
     if isnothing(save_dir)
         t = Dates.format(now(), "yyyymmddHHMMSS")
-        save_dir = joinpath(pwd(), "dopamine_DQN_atari_$(name)_$(t)")
+        save_dir = joinpath(pwd(), "checkpoints", "dopamine_DQN_atari_$(name)_$(t)")
     end
 
     lg=TBLogger(joinpath(save_dir, "tb_log"), min_level=Logging.Info)
