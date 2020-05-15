@@ -26,6 +26,7 @@ ReinforcementLearningCore = "0.3"
 Setfield = "0.6"
 Requires = "1.0"
 StatsBase = "0.32"
+TensorBoardLogger = "0.1"
 Zygote = "0.4"
 julia = "1.3"
 
