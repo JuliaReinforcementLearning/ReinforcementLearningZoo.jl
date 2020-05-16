@@ -8,6 +8,7 @@ using ReinforcementLearningCore
 
 include("patch.jl")
 include("algorithms/algorithms.jl")
+include("utils.jl")
 
 using Requires
 
