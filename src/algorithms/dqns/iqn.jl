@@ -7,6 +7,36 @@ using Zygote
 using Statistics: mean
 using LinearAlgebra: dot
 
+"""
+    ImplicitQunatileNet(;ψ, ϕ, header)
+
+```
+        quantiles (n_action, n_quantiles, batch_size)
+           ↑
+         header
+           ↑
+feature ↱  ⨀   ↰ transformed embedding
+       ψ       ϕ
+       ↑       ↑
+       s        τ
+```
+"""
+Base.@kwdef struct ImplicitQunatileNet{A, B, C}
+    ψ::A
+    ϕ::B
+    header::C
+end
+
+Flux.@functor ImplicitQunatileNet
+
+function (net::ImplicitQunatileNet)(s, emb)
+    features = net.ψ(s)  # (n_feature, batch_size)
+    emb_aligned = net.ϕ(emb)  # (n_feature, N * batch_size)
+    merged = Flux.unsqueeze(features, 2) .* reshape(emb_aligned, size(features, 1), :, size(features,2))  # (n_feature, N, batch_size)
+    quantiles = net.header(flatten_batch(merged))
+    reshape(quantiles, :, size(merged, 2), size(merged, 3))  # (n_action, N, batch_size)
+end 
+
 mutable struct IQNLearner{A,T,R,D} <: AbstractLearner
     approximator::A
     target_approximator::T
@@ -103,36 +133,6 @@ function (learner::IQNLearner)(obs)
     quantiles = learner.approximator(state, τₑₘ)
     vec(sum(quantiles; dims=2)) |> send_to_host
 end
-
-"""
-    ImplicitQunatileNet(;ψ, ϕ, header)
-
-```
-        quantiles (n_action, n_quantiles, batch_size)
-           ↑
-         header
-           ↑
-feature ↱  ⨀   ↰ transformed embedding
-       ψ       ϕ
-       ↑       ↑
-       s        τ
-```
-"""
-Base.@kwdef struct ImplicitQunatileNet{A, B, C}
-    ψ::A
-    ϕ::B
-    header::C
-end
-
-Flux.@functor ImplicitQunatileNet
-
-function (net::ImplicitQunatileNet)(s, emb)
-    features = net.ψ(s)  # (n_feature, batch_size)
-    emb_aligned = net.ϕ(emb)  # (n_feature, N * batch_size)
-    merged = Flux.unsqueeze(features, 2) .* reshape(emb_aligned, size(features, 1), :, size(features,2))  # (n_feature, N, batch_size)
-    quantiles = net.header(flatten_batch(merged))
-    reshape(quantiles, :, size(merged, 2), size(merged, 3))  # (n_action, N, batch_size)
-end 
 
 embed(x, Nₑₘ) = cos.(Float32(π) .* (1:Nₑₘ) .* reshape(x, 1, :))
 
