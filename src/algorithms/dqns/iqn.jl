@@ -97,7 +97,11 @@ function IQNLearner(;
     rng=MersenneTwister(seed)
     if device(approximator) === Val(:gpu)
         device_rng = CuArrays.CURAND.RNG()
+<<<<<<< HEAD
         Random.seed!(device_rng, device_seed)  # https://github.com/JuliaGPU/CuArrays.jl/commit/43c12485182a6a7425c1fda0d2f66cc0eae8a2bf
+=======
+        Random.seed!(device_rng, device_seed)
+>>>>>>> upstream/master
     else
         device_rng = rng
     end
