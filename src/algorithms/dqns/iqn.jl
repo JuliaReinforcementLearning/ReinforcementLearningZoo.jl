@@ -97,7 +97,7 @@ function IQNLearner(;
     rng=MersenneTwister(seed)
     if device(approximator) === Val(:gpu)
         device_rng = CuArrays.CURAND.RNG()
-        Random.seed!(device_rng, device_seed)
+        Random.seed!(device_rng, device_seed)  # https://github.com/JuliaGPU/CuArrays.jl/commit/43c12485182a6a7425c1fda0d2f66cc0eae8a2bf
     else
         device_rng = rng
     end
@@ -166,6 +166,7 @@ function RLBase.update!(learner::IQNLearner, batch::NamedTuple)
     updated_priorities = Vector{Float32}(undef, batch_size)
     weights = 1f0 ./ ((batch.priorities .+ 1f-10) .^ β)
     weights ./= maximum(weights)
+    weights = send_to_device(D, weights)
 
     gs= Zygote.gradient(Flux.params(Z)) do
         z = flatten_batch(Z(s, τₑₘ))

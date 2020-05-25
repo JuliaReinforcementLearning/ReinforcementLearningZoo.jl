@@ -144,8 +144,9 @@ function RLBase.update!(learner::RainbowLearner, batch::NamedTuple)
         learner.update_horizon,
         learner.batch_size
 
+    D = device(Q)
     states, rewards, terminals, next_states = map(
-        x -> send_to_device(device(Q), x),
+        x -> send_to_device(D, x),
         (batch.states, batch.rewards, batch.terminals, batch.next_states),
     )
     actions = CartesianIndex.(batch.actions, 1:batch_size)
@@ -171,6 +172,7 @@ function RLBase.update!(learner::RainbowLearner, batch::NamedTuple)
     updated_priorities = Vector{Float32}(undef, batch_size)
     weights = 1f0 ./ ((batch.priorities .+ 1f-10) .^ β)
     weights ./= maximum(weights)
+    weights = send_to_device(D, weights)
 
     gs = gradient(Flux.params(Q)) do
         logits = reshape(Q(states), n_atoms, n_actions, :)
