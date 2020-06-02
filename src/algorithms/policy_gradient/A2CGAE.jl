@@ -78,7 +78,8 @@ function RLBase.update!(learner::A2CGAELearner, t::AbstractTrajectory)
     advantages = flatten_batch(advantages)
     advantages = send_to_device(device(AC), advantages)
 
-    gs = gradient(Flux.params(AC)) do
+    ps = Flux.params(AC)
+    gs = gradient(ps) do
         logits = AC.actor(states_flattened)
         probs = softmax(logits)
         log_probs = logsoftmax(logits)
@@ -99,7 +100,7 @@ function RLBase.update!(learner::A2CGAELearner, t::AbstractTrajectory)
     end
 
     if !isnothing(learner.max_grad_norm)
-        learner.norm = clip_by_global_norm!(gs, learner.max_grad_norm)
+        learner.norm = clip_by_global_norm!(gs, ps, learner.max_grad_norm)
     end
 
     update!(AC, gs)
