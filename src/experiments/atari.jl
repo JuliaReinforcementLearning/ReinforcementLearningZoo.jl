@@ -559,7 +559,7 @@ function RLCore.Experiment(
     )
 
     N_TRAINING_STEPS = 10_000_000
-    EVALUATION_FREQ = 250_000
+    EVALUATION_FREQ = 100_000
     N_CHECKPOINTS = 3
     stop_condition = StopAfterStep(N_TRAINING_STEPS)
 
@@ -588,38 +588,38 @@ function RLCore.Experiment(
                 end
             end
         end,
-        # DoEveryNStep(EVALUATION_FREQ) do t, agent, env, obs
-        #     @info "evaluating agent at $t step..."
-        #     flush(stdout)
-        #     Flux.testmode!(agent)
-        #     h = TotalBatchRewardPerEpisode(N_ENV)
-        #     s = @elapsed run(
-        #         agent,
-        #         MultiThreadEnv([atari_env_factory(name, STATE_SIZE, N_FRAMES;) for i in 1:N_ENV]),
-        #         StopAfterStep(50_000; is_show_progress = false),
-        #         h,
-        #     )
-        #     res = (
-        #         avg_score = mean(Iterators.flatten(h.rewards)),
-        #     )
-        #     push!(evaluation_result, res)
-        #     Flux.trainmode!(agent)
-        #     @info "finished evaluating agent in $s seconds" avg_score = res.avg_score
-        #     with_logger(lg) do
-        #         @info "evaluating" avg_score = res.avg_score log_step_increment = 0
-        #     end
-        #     flush(stdout)
+        DoEveryNStep(EVALUATION_FREQ) do t, agent, env, obs
+            @info "evaluating agent at $t step..."
+            flush(stdout)
+            Flux.testmode!(agent)
+            h = TotalBatchRewardPerEpisode(N_ENV)
+            s = @elapsed run(
+                agent,
+                MultiThreadEnv([atari_env_factory(name, STATE_SIZE, N_FRAMES;) for i in 1:N_ENV]),
+                StopAfterStep(27_000; is_show_progress = false),
+                h,
+            )
+            res = (
+                avg_score = mean(Iterators.flatten(h.rewards)),
+            )
+            push!(evaluation_result, res)
+            Flux.trainmode!(agent)
+            @info "finished evaluating agent in $s seconds" avg_score = res.avg_score
+            with_logger(lg) do
+                @info "evaluating" avg_score = res.avg_score log_step_increment = 0
+            end
+            flush(stdout)
 
-        #     RLCore.save(joinpath(save_dir, string(t)), agent; is_save_trajectory = false)  # saving trajectory will take about 27G disk space each time
-        #     BSON.@save joinpath(save_dir, string(t), "stats.bson") total_batch_reward_per_episode evaluation_result
+            RLCore.save(joinpath(save_dir, string(t)), agent;)
+            BSON.@save joinpath(save_dir, string(t), "stats.bson") total_batch_reward_per_episode evaluation_result
 
-        #     # only keep recent 3 checkpoints
-        #     old_checkpoint_folder =
-        #         joinpath(save_dir, string(t - EVALUATION_FREQ * N_CHECKPOINTS))
-        #     if isdir(old_checkpoint_folder)
-        #         rm(old_checkpoint_folder; force = true, recursive = true)
-        #     end
-        # end
+            # only keep recent 3 checkpoints
+            old_checkpoint_folder =
+                joinpath(save_dir, string(t - EVALUATION_FREQ * N_CHECKPOINTS))
+            if isdir(old_checkpoint_folder)
+                rm(old_checkpoint_folder; force = true, recursive = true)
+            end
+        end
     )
 
     description = """
@@ -701,7 +701,7 @@ function RLCore.Experiment(
     )
 
     N_TRAINING_STEPS = 10_000_000
-    EVALUATION_FREQ = 250_000
+    EVALUATION_FREQ = 100_000
     N_CHECKPOINTS = 3
     stop_condition = StopAfterStep(N_TRAINING_STEPS)
 
@@ -730,38 +730,38 @@ function RLCore.Experiment(
                 end
             end
         end,
-        # DoEveryNStep(EVALUATION_FREQ) do t, agent, env, obs
-        #     @info "evaluating agent at $t step..."
-        #     flush(stdout)
-        #     Flux.testmode!(agent)
-        #     h = TotalBatchRewardPerEpisode(N_ENV)
-        #     s = @elapsed run(
-        #         agent,
-        #         MultiThreadEnv([atari_env_factory(name, STATE_SIZE, N_FRAMES;) for i in 1:N_ENV]),
-        #         StopAfterStep(50_000; is_show_progress = false),
-        #         h,
-        #     )
-        #     res = (
-        #         avg_score = mean(Iterators.flatten(h.rewards)),
-        #     )
-        #     push!(evaluation_result, res)
-        #     Flux.trainmode!(agent)
-        #     @info "finished evaluating agent in $s seconds" avg_score = res.avg_score
-        #     with_logger(lg) do
-        #         @info "evaluating" avg_score = res.avg_score log_step_increment = 0
-        #     end
-        #     flush(stdout)
+        DoEveryNStep(EVALUATION_FREQ) do t, agent, env, obs
+            @info "evaluating agent at $t step..."
+            flush(stdout)
+            Flux.testmode!(agent)
+            h = TotalBatchRewardPerEpisode(N_ENV)
+            s = @elapsed run(
+                agent,
+                MultiThreadEnv([atari_env_factory(name, STATE_SIZE, N_FRAMES;) for i in 1:N_ENV]),
+                StopAfterStep(27_000; is_show_progress = false),
+                h,
+            )
+            res = (
+                avg_score = mean(Iterators.flatten(h.rewards)),
+            )
+            push!(evaluation_result, res)
+            Flux.trainmode!(agent)
+            @info "finished evaluating agent in $s seconds" avg_score = res.avg_score
+            with_logger(lg) do
+                @info "evaluating" avg_score = res.avg_score log_step_increment = 0
+            end
+            flush(stdout)
 
-        #     RLCore.save(joinpath(save_dir, string(t)), agent; is_save_trajectory = false)  # saving trajectory will take about 27G disk space each time
-        #     BSON.@save joinpath(save_dir, string(t), "stats.bson") total_batch_reward_per_episode evaluation_result
+            RLCore.save(joinpath(save_dir, string(t)), agent;)
+            BSON.@save joinpath(save_dir, string(t), "stats.bson") total_batch_reward_per_episode evaluation_result
 
-        #     # only keep recent 3 checkpoints
-        #     old_checkpoint_folder =
-        #         joinpath(save_dir, string(t - EVALUATION_FREQ * N_CHECKPOINTS))
-        #     if isdir(old_checkpoint_folder)
-        #         rm(old_checkpoint_folder; force = true, recursive = true)
-        #     end
-        # end
+            # only keep recent 3 checkpoints
+            old_checkpoint_folder =
+                joinpath(save_dir, string(t - EVALUATION_FREQ * N_CHECKPOINTS))
+            if isdir(old_checkpoint_folder)
+                rm(old_checkpoint_folder; force = true, recursive = true)
+            end
+        end
     )
 
     description = """

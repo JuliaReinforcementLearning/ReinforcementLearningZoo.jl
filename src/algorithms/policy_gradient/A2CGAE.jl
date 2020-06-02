@@ -107,7 +107,7 @@ function RLBase.update!(learner::A2CGAELearner, t::AbstractTrajectory)
 end
 
 function (agent::Agent{<:QBasedPolicy{<:A2CGAELearner},<:CircularCompactSARTSATrajectory})(
-    ::PreActStage,
+    ::Training{PreActStage},
     obs,
 )
     action = agent.policy(obs)
