@@ -657,7 +657,7 @@ function RLCore.Experiment(
     )
 
     description = """
-    # Play CartPole with DDPG
+    # Play Pendulum with DDPG
     """
 
     Experiment(agent, env, StopAfterStep(10000), TotalRewardPerEpisode(), description)
