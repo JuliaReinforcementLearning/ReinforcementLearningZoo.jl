@@ -12,29 +12,43 @@ using Flux
 - `critic_loss_weight::Float32`
 - `entropy_loss_weight::Float32`
 """
-Base.@kwdef struct A2CGAELearner{A} <: AbstractLearner
+Base.@kwdef mutable struct A2CGAELearner{A<:ActorCritic} <: AbstractLearner
     approximator::A
     γ::Float32
     λ::Float32
+    max_grad_norm::Union{Nothing,Float32} = nothing
+    norm::Float32 = 0.f0
     actor_loss_weight::Float32
     critic_loss_weight::Float32
     entropy_loss_weight::Float32
+    actor_loss::Float32 = 0.f0
+    critic_loss::Float32 = 0.f0
+    entropy_loss::Float32 = 0.f0
+    loss::Float32 = 0.f0
 end
 
 (learner::A2CGAELearner)(obs::BatchObs) =
-    learner.approximator(
-        send_to_device(device(learner.approximator), get_state(obs)),
-        Val(:Q),
-    ) |> send_to_host
+    learner.approximator.actor(send_to_device(
+        device(learner.approximator),
+        get_state(obs),
+    )) |> send_to_host
 
-function RLBase.update!(learner::A2CGAELearner, experience)
+function RLBase.update!(learner::A2CGAELearner, t::AbstractTrajectory)
+    isfull(t) || return
+
+    states = get_trace(t, :state)
+    actions = get_trace(t, :action)
+    rewards = get_trace(t, :reward)
+    terminals = get_trace(t, :terminal)
+    rollout = t[:state]
+
     AC = learner.approximator
     γ = learner.γ
     λ = learner.λ
     w₁ = learner.actor_loss_weight
     w₂ = learner.critic_loss_weight
     w₃ = learner.entropy_loss_weight
-    states, actions, rewards, terminals, rollout = experience
+
     states = send_to_device(device(AC), states)
     rollout = flatten_batch(rollout)
     rollout = send_to_device(device(AC), rollout)
@@ -43,7 +57,7 @@ function RLBase.update!(learner::A2CGAELearner, experience)
     actions = flatten_batch(actions)
     actions = CartesianIndex.(actions, 1:length(actions))
 
-    rollout_values = AC(rollout, Val(:V))
+    rollout_values = AC.critic(rollout)
     rollout_values = send_to_host(rollout_values)
     rollout_values = reshape(
         rollout_values,
@@ -64,40 +78,36 @@ function RLBase.update!(learner::A2CGAELearner, experience)
     advantages = flatten_batch(advantages)
     advantages = send_to_device(device(AC), advantages)
 
-    gs = gradient(Flux.params(AC)) do
-        probs = AC(states_flattened, Val(:Q))
-        log_probs = log.(probs)
+    ps = Flux.params(AC)
+    gs = gradient(ps) do
+        logits = AC.actor(states_flattened)
+        probs = softmax(logits)
+        log_probs = logsoftmax(logits)
         log_probs_select = log_probs[actions]
-        values = AC(states_flattened, Val(:V))
+        values = AC.critic(states_flattened)
         advantage = vec(gains) .- vec(values)
         actor_loss = -mean(log_probs_select .* advantages)
         critic_loss = mean(advantage .^ 2)
-        entropy_loss = sum(probs .* log_probs) * 1 // size(probs, 2)
+        entropy_loss = -sum(probs .* log_probs) * 1 // size(probs, 2)
         loss = w₁ * actor_loss + w₂ * critic_loss - w₃ * entropy_loss
+        ignore() do
+            learner.actor_loss = actor_loss
+            learner.critic_loss = critic_loss
+            learner.entropy_loss = entropy_loss
+            learner.loss = loss
+        end
         loss
     end
+
+    if !isnothing(learner.max_grad_norm)
+        learner.norm = clip_by_global_norm!(gs, ps, learner.max_grad_norm)
+    end
+
     update!(AC, gs)
 end
 
-function RLBase.extract_experience(
-    t::CircularCompactSARTSATrajectory,
-    learner::A2CGAELearner,
-)
-    if isfull(t)
-        (
-            states = get_trace(t, :state),
-            actions = get_trace(t, :action),
-            rewards = get_trace(t, :reward),
-            terminals = get_trace(t, :terminal),
-            rollout = t[:state],
-        )
-    else
-        nothing
-    end
-end
-
 function (agent::Agent{<:QBasedPolicy{<:A2CGAELearner},<:CircularCompactSARTSATrajectory})(
-    ::PreActStage,
+    ::Training{PreActStage},
     obs,
 )
     action = agent.policy(obs)

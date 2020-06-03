@@ -1,55 +1,60 @@
-export A2CLearner, ActorCritic
+export A2CLearner
 
 using Flux
-
-"""
-    ActorCritic(actor, critic)
-
-The `actor` part must return a **normalized** vector representing the action values,
-and the `critic` part must return a state value.
-"""
-Base.@kwdef struct ActorCritic{A,C}
-    actor::A
-    critic::C
-end
-
-Flux.@functor ActorCritic
-
-(m::ActorCritic)(s::AbstractArray, ::Val{:Q}) = m.actor(s)
-(m::ActorCritic)(s::AbstractArray, ::Val{:V}) = m.critic(s)
 
 """
     A2CLearner(;kwargs...)
 
 # Keyword arguments
 
-- `approximator`, an [`ActorCritic`](@ref) based [`NeuralNetworkApproximator`](@ref)
+- `approximator`::[`ActorCritic`](@ref)
 - `γ::Float32`, reward discount rate.
 - `actor_loss_weight::Float32`
 - `critic_loss_weight::Float32`
 - `entropy_loss_weight::Float32`
 """
-Base.@kwdef struct A2CLearner{A} <: AbstractLearner
+Base.@kwdef mutable struct A2CLearner{A<:ActorCritic} <: AbstractLearner
     approximator::A
     γ::Float32
+    max_grad_norm::Union{Nothing,Float32} = nothing
+    norm::Float32 = 0.f0
     actor_loss_weight::Float32
     critic_loss_weight::Float32
     entropy_loss_weight::Float32
+    actor_loss::Float32 = 0.f0
+    critic_loss::Float32 = 0.f0
+    entropy_loss::Float32 = 0.f0
+    loss::Float32 = 0.f0
 end
 
 (learner::A2CLearner)(obs::BatchObs) =
-    learner.approximator(
-        send_to_device(device(learner.approximator), get_state(obs)),
-        Val(:Q),
-    ) |> send_to_host
+    learner.approximator.actor(send_to_device(
+        device(learner.approximator),
+        get_state(obs),
+    )) |> send_to_host
 
-function RLBase.update!(learner::A2CLearner, experience)
+function (learner::A2CLearner)(obs)
+    s = get_state(obs)
+    s = Flux.unsqueeze(s, ndims(s) + 1)
+    s = send_to_device(device(learner.approximator), s)
+    learner.approximator.actor(s) |> vec |> send_to_host
+end
+
+function RLBase.update!(learner::A2CLearner, t::AbstractTrajectory)
+    isfull(t) || return
+
+    states = get_trace(t, :state)
+    actions = get_trace(t, :action)
+    rewards = get_trace(t, :reward)
+    terminals = get_trace(t, :terminal)
+    next_state = select_last_frame(get_trace(t, :next_state))
+
     AC = learner.approximator
     γ = learner.γ
     w₁ = learner.actor_loss_weight
     w₂ = learner.critic_loss_weight
     w₃ = learner.entropy_loss_weight
-    states, actions, rewards, terminals, next_state = experience
+
     states = send_to_device(device(AC), states)
     next_state = send_to_device(device(AC), next_state)
 
@@ -57,7 +62,7 @@ function RLBase.update!(learner::A2CLearner, experience)
     actions = flatten_batch(actions)
     actions = CartesianIndex.(actions, 1:length(actions))
 
-    next_state_values = AC(next_state, Val(:V))
+    next_state_values = AC.critic(next_state)
     gains = discount_rewards(
         rewards,
         γ;
@@ -67,37 +72,34 @@ function RLBase.update!(learner::A2CLearner, experience)
     )
     gains = send_to_device(device(AC), gains)
 
-    gs = gradient(Flux.params(AC)) do
-        probs = AC(states_flattened, Val(:Q))
-        log_probs = log.(probs)
+    ps = Flux.params(AC)
+    gs = gradient(ps) do
+        logits = AC.actor(states_flattened)
+        probs = softmax(logits)
+        log_probs = logsoftmax(logits)
         log_probs_select = log_probs[actions]
-        values = AC(states_flattened, Val(:V))
+        values = AC.critic(states_flattened)
         advantage = vec(gains) .- vec(values)
         actor_loss = -mean(log_probs_select .* Zygote.dropgrad(advantage))
         critic_loss = mean(advantage .^ 2)
-        entropy_loss = sum(probs .* log_probs) * 1 // size(probs, 2)
+        entropy_loss = -sum(probs .* log_probs) * 1 // size(probs, 2)
         loss = w₁ * actor_loss + w₂ * critic_loss - w₃ * entropy_loss
+        ignore() do
+            learner.actor_loss = actor_loss
+            learner.critic_loss = critic_loss
+            learner.entropy_loss = entropy_loss
+            learner.loss = loss
+        end
         loss
+    end
+    if !isnothing(learner.max_grad_norm)
+        learner.norm = clip_by_global_norm!(gs, ps, learner.max_grad_norm)
     end
     update!(AC, gs)
 end
 
-function RLBase.extract_experience(t::CircularCompactSARTSATrajectory, learner::A2CLearner)
-    if isfull(t)
-        (
-            states = get_trace(t, :state),
-            actions = get_trace(t, :action),
-            rewards = get_trace(t, :reward),
-            terminals = get_trace(t, :terminal),
-            next_state = select_last_frame(get_trace(t, :next_state)),
-        )
-    else
-        nothing
-    end
-end
-
 function (agent::Agent{<:QBasedPolicy{<:A2CLearner},<:CircularCompactSARTSATrajectory})(
-    ::PreActStage,
+    ::Training{PreActStage},
     obs,
 )
     action = agent.policy(obs)

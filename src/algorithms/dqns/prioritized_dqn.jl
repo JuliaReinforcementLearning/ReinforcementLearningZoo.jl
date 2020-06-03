@@ -4,11 +4,13 @@ using Random
 using Flux
 using Zygote
 using StatsBase: mean
+using LinearAlgebra: dot
 
 """
     PrioritizedDQNLearner(;kwargs...)
 
 See paper: [Prioritized Experience Replay](https://arxiv.org/abs/1511.05952)
+And also https://danieltakeshi.github.io/2019/07/14/per/
 
 # Keywords
 
@@ -44,7 +46,9 @@ mutable struct PrioritizedDQNLearner{
     target_update_freq::Int
     update_step::Int
     default_priority::Float32
+    β_priority::Float32
     rng::R
+    loss::Float32
 end
 
 function PrioritizedDQNLearner(;
@@ -60,6 +64,7 @@ function PrioritizedDQNLearner(;
     target_update_freq::Int = 100,
     update_step::Int = 0,
     default_priority::Float32 = 100f0,
+    β_priority::Float32 = 0.5f0,
     seed = nothing,
 ) where {Tq,Tt,Tf}
     copyto!(approximator, target_approximator)
@@ -77,8 +82,18 @@ function PrioritizedDQNLearner(;
         target_update_freq,
         update_step,
         default_priority,
+        β_priority,
         rng,
+        0.f0,
     )
+end
+
+
+Flux.functor(x::PrioritizedDQNLearner) = (Q = x.approximator, Qₜ = x.target_approximator),
+y -> begin
+    x = @set x.approximator = y.Q
+    x = @set x.target_approximator = y.Qₜ
+    x
 end
 
 """
@@ -88,120 +103,50 @@ end
     if `!isnothing(stack_size)`.
 """
 (learner::PrioritizedDQNLearner)(obs) =
-    obs |> get_state |>
+    obs |>
+    get_state |>
     x ->
-        send_to_device(device(learner.approximator), x) |> learner.approximator |>
-        send_to_host
+        Flux.unsqueeze(x, ndims(x) + 1) |>
+        x ->
+            send_to_device(device(learner.approximator), x) |>
+            learner.approximator |>
+            send_to_host |>
+            Flux.squeezebatch
 
-function RLBase.update!(learner::PrioritizedDQNLearner, batch)
-    learner.update_step += 1
-    learner.update_step % learner.update_freq == 0 || return nothing
-
-    Q, Qₜ, γ, loss_func, update_horizon, batch_size = learner.approximator,
+function RLBase.update!(learner::PrioritizedDQNLearner, batch::NamedTuple)
+    Q, Qₜ, γ, β, loss_func, update_horizon, batch_size = learner.approximator,
     learner.target_approximator,
     learner.γ,
+    learner.β_priority,
     learner.loss_func,
     learner.update_horizon,
     learner.batch_size
+    D = device(Q)
     states, rewards, terminals, next_states = map(
-        x -> send_to_device(device(Q), x),
+        x -> send_to_device(D, x),
         (batch.states, batch.rewards, batch.terminals, batch.next_states),
     )
     actions = CartesianIndex.(batch.actions, 1:batch_size)
 
-    priorities = send_to_device(device(Q), Vector{Float32}())
+    updated_priorities = Vector{Float32}(undef, batch_size)
+    weights = 1f0 ./ ((batch.priorities .+ 1f-10) .^ β)
+    weights ./= maximum(weights)
+    weights = send_to_device(D, weights)
 
     gs = gradient(params(Q)) do
-        q = batch_estimate(Q, states)[actions]
-        q′ = dropdims(maximum(batch_estimate(Qₜ, next_states); dims = 1), dims = 1)
+        q = Q(states)[actions]
+        q′ = dropdims(maximum(Qₜ(next_states); dims = 1), dims = 1)
         G = rewards .+ γ^update_horizon .* (1 .- terminals) .* q′
 
         batch_losses = loss_func(G, q)
-        priorities = (Zygote.dropgrad(batch_losses) .+ 1f-10)
-        mean(batch_losses)
+        loss = dot(vec(weights), vec(batch_losses)) / batch_size
+        ignore() do
+            updated_priorities .= send_to_host(vec((batch_losses .+ 1f-10) .^ β))
+            learner.loss = loss
+        end
+        loss
     end
 
     update!(Q, gs)
-
-    if learner.update_step % learner.target_update_freq == 0
-        copyto!(Qₜ, Q)
-    end
-
-    send_to_host(priorities)
-end
-
-function RLBase.extract_experience(t::AbstractTrajectory, learner::PrioritizedDQNLearner)
-    s = learner.stack_size
-    h = learner.update_horizon
-    n = learner.batch_size
-    γ = learner.γ
-    if length(t) > learner.min_replay_history
-        # 1. sample indices based on priority
-        inds = Vector{Int}(undef, n)
-        valid_ind_range = isnothing(s) ? (1:(length(t)-h)) : (s:(1:(length(t)-h)))
-        for i in 1:n
-            ind, p = sample(learner.rng, get_trace(t, :priority))
-            while ind ∉ valid_ind_range
-                ind, p = sample(learner.rng, get_trace(t, :priority))
-            end
-            inds[i] = ind
-        end
-
-        # 2. extract SARTS
-        states = consecutive_view(get_trace(t, :state), inds; n_stack = s)
-        actions = consecutive_view(get_trace(t, :action), inds)
-        next_states = consecutive_view(get_trace(t, :state), inds .+ h; n_stack = s)
-        consecutive_rewards = consecutive_view(get_trace(t, :reward), inds; n_horizon = h)
-        consecutive_terminals =
-            consecutive_view(get_trace(t, :terminal), inds; n_horizon = h)
-        rewards, terminals = zeros(Float32, n), fill(false, n)
-
-        rewards = discount_rewards_reduced(
-            consecutive_rewards,
-            γ;
-            terminal = consecutive_terminals,
-            dims = 1,
-        )
-        terminals = mapslices(any, consecutive_terminals; dims = 1) |> vec
-
-        inds,
-        (
-            states = states,
-            actions = actions,
-            rewards = rewards,
-            terminals = terminals,
-            next_states = next_states,
-        )
-    else
-        nothing
-    end
-end
-
-function RLBase.update!(p::QBasedPolicy{<:PrioritizedDQNLearner}, t::AbstractTrajectory)
-    indexed_experience = extract_experience(t, p)
-    if !isnothing(indexed_experience)
-        inds, experience = indexed_experience
-        priorities = update!(p.learner, experience)
-        if !isnothing(priorities)
-            get_trace(t, :priority)[inds] .= priorities
-        end
-    end
-end
-
-function (
-    agent::Agent{
-        <:QBasedPolicy{<:PrioritizedDQNLearner},
-        <:CircularCompactPSARTSATrajectory,
-    }
-)(
-    ::PostActStage,
-    obs,
-)
-    push!(
-        agent.trajectory;
-        reward = get_reward(obs),
-        terminal = get_terminal(obs),
-        priority = agent.policy.learner.default_priority,
-    )
-    nothing
+    updated_priorities
 end
