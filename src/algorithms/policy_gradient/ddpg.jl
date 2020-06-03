@@ -1,8 +1,20 @@
 export DDPGPolicy
 
-mutable struct DDPGPolicy{B, T, P, R} <: AbstractPolicy
-    behavior_approximator::B
-    target_approximator::T
+using Random
+using Flux
+
+mutable struct DDPGPolicy{
+    BA<:NeuralNetworkApproximator,
+    BC<:NeuralNetworkApproximator,
+    TA<:NeuralNetworkApproximator,
+    TC<:NeuralNetworkApproximator,
+    P,
+    R<:AbstractRNG} <: AbstractPolicy
+
+    behavior_actor::BA
+    behavior_critic::BC
+    target_actor::TA
+    target_critic::TC
     γ::Float32
     ρ::Float32
     batch_size::Int
@@ -17,8 +29,10 @@ mutable struct DDPGPolicy{B, T, P, R} <: AbstractPolicy
 end
 
 function DDPGPolicy(;
-        behavior_approximator,
-        target_approximator,
+        behavior_actor,
+        behavior_critic,
+        target_actor,
+        target_critic,
         start_policy,
         γ=0.99f0,
         ρ=0.995f0,
@@ -32,10 +46,13 @@ function DDPGPolicy(;
         seed=nothing
 )
     rng = MersenneTwister(seed)
-    copyto!(behavior_approximator, target_approximator)  # force sync
+    copyto!(behavior_actor, target_actor)  # force sync
+    copyto!(behavior_critic, target_critic)  # force sync
     DDPGPolicy(
-        behavior_approximator,
-        target_approximator,
+        behavior_actor,
+        behavior_critic,
+        target_actor,
+        target_critic,
         γ,
         ρ,
         batch_size,
@@ -50,18 +67,17 @@ function DDPGPolicy(;
     )
 end
 
-actor(app::NeuralNetworkApproximator{HYBRID_APPROXIMATOR, <:ActorCritic}) = app.model.actor
-critic(app::NeuralNetworkApproximator{HYBRID_APPROXIMATOR, <:ActorCritic}) = app.model.critic
-
 function (p::DDPGPolicy)(obs)
     p.step += 1
     
     if p.step <= p.start_steps
         p.start_policy(obs)
     else
-        D = device(p.behavior_approximator)
-        action = actor(p.behavior_approximator)(send_to_device(D, get_state(obs)))
-        clamp(send_to_host(action)[1] + randn(p.rng) * p.act_noise, -p.act_limit, p.act_limit)
+        D = device(p.behavior_actor)
+        s = get_state(obs)
+        s = Flux.unsqueeze(s, ndims(s)+1)
+        action = p.behavior_actor(send_to_device(D, s)) |> vec |> send_to_host
+        clamp(action[] + randn(p.rng) * p.act_noise, -p.act_limit, p.act_limit)
     end
 end
 
@@ -69,41 +85,42 @@ function RLBase.update!(p::DDPGPolicy, t::CircularCompactSARTSATrajectory)
     length(t) > p.update_after || return
     p.step % p.update_every == 0 || return
     
-    inds = rand(p.rng, 1:length(t), p.batch_size)
+    inds = rand(p.rng, 1:(length(t)-1), p.batch_size)
     SARTS = (:state, :action, :reward, :terminal, :next_state)
     s, a, r, t, s′= map(x -> select_last_dim(get_trace(t, x), inds), SARTS)
-    a = Flux.unsqueeze(a, 1)
 
-    A = actor(p.behavior_approximator)
-    C = critic(p.behavior_approximator)
-    Aₜ = actor(p.target_approximator)
-    Cₜ = critic(p.target_approximator)
+    A = p.behavior_actor
+    C = p.behavior_critic
+    Aₜ = p.target_actor
+    Cₜ = p.target_critic
 
     γ = p.γ
     ρ = p.ρ
 
     
+    # !!! we have several assumptions here, need revisit when we have more complex environments
+    # state is vector
+    # action is scalar
     a′ = Aₜ(s′)
     qₜ = Cₜ(vcat(s′, a′)) |> vec
     y = r .+ γ.*(1 .- t) .* qₜ
-
+    a = Flux.unsqueeze(a, 1)
 
     gs1 = gradient(Flux.params(C)) do
         q = C(vcat(s, a)) |> vec
         mean((y .- q) .^ 2)
     end
 
-    
-    Flux.Optimise.update!(p.behavior_approximator.optimizer, Flux.params(C), gs1)
+    update!(C, gs1)
  
     gs2 = gradient(Flux.params(A)) do
         -mean(C(vcat(s, A(s))))
     end
     
-    Flux.Optimise.update!(p.behavior_approximator.optimizer, Flux.params(A), gs2)
+    update!(A, gs2)
     
     # polyak averaging
-    for (dest, src) in zip(Flux.params(p.target_approximator), Flux.params(p.behavior_approximator))
+    for (dest, src) in zip(Flux.params([Aₜ, Cₜ]), Flux.params([A,C]))
         dest .= ρ .* dest  .+ (1-ρ) .* src
     end
 end
