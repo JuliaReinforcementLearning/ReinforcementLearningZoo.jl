@@ -1,21 +1,21 @@
-export A2CLearner
+export A2CGAELearner
 
 using Flux
 
 """
-    A2CLearner(;kwargs...)
-
+    A2CGAELearner(;kwargs...)
 # Keyword arguments
-
-- `approximator`::[`ActorCritic`](@ref)
+- `approximator`, an [`ActorCritic`](@ref) based [`NeuralNetworkApproximator`](@ref)
 - `γ::Float32`, reward discount rate.
+- 'λ::Float32', lambda for GAE-lambda
 - `actor_loss_weight::Float32`
 - `critic_loss_weight::Float32`
 - `entropy_loss_weight::Float32`
 """
-Base.@kwdef mutable struct A2CLearner{A<:ActorCritic} <: AbstractLearner
+Base.@kwdef mutable struct A2CGAELearner{A<:ActorCritic} <: AbstractLearner
     approximator::A
     γ::Float32
+    λ::Float32
     max_grad_norm::Union{Nothing,Float32} = nothing
     norm::Float32 = 0.f0
     actor_loss_weight::Float32
@@ -27,50 +27,56 @@ Base.@kwdef mutable struct A2CLearner{A<:ActorCritic} <: AbstractLearner
     loss::Float32 = 0.f0
 end
 
-(learner::A2CLearner)(obs::BatchObs) =
+(learner::A2CGAELearner)(obs::BatchObs) =
     learner.approximator.actor(send_to_device(
         device(learner.approximator),
         get_state(obs),
     )) |> send_to_host
 
-function (learner::A2CLearner)(obs)
-    s = get_state(obs)
-    s = Flux.unsqueeze(s, ndims(s) + 1)
-    s = send_to_device(device(learner.approximator), s)
-    learner.approximator.actor(s) |> vec |> send_to_host
-end
-
-function RLBase.update!(learner::A2CLearner, t::AbstractTrajectory)
+function RLBase.update!(learner::A2CGAELearner, t::AbstractTrajectory)
     isfull(t) || return
 
     states = get_trace(t, :state)
     actions = get_trace(t, :action)
     rewards = get_trace(t, :reward)
     terminals = get_trace(t, :terminal)
-    next_state = select_last_frame(get_trace(t, :next_state))
+    rollout = t[:state]
 
     AC = learner.approximator
     γ = learner.γ
+    λ = learner.λ
     w₁ = learner.actor_loss_weight
     w₂ = learner.critic_loss_weight
     w₃ = learner.entropy_loss_weight
 
     states = send_to_device(device(AC), states)
-    next_state = send_to_device(device(AC), next_state)
+    rollout = flatten_batch(rollout)
+    rollout = send_to_device(device(AC), rollout)
 
     states_flattened = flatten_batch(states) # (state_size..., n_thread * update_step)
     actions = flatten_batch(actions)
     actions = CartesianIndex.(actions, 1:length(actions))
 
-    next_state_values = AC.critic(next_state)
-    gains = discount_rewards(
+    rollout_values = AC.critic(rollout)
+    rollout_values = send_to_host(rollout_values)
+    rollout_values = reshape(
+        rollout_values,
+        size(states, ndims(states) - 1),
+        size(states, ndims(states)) + 1,
+    )
+    advantages = generalized_advantage_estimation(
         rewards,
-        γ;
+        rollout_values,
+        γ,
+        λ;
         dims = 2,
-        init = send_to_host(next_state_values),
         terminal = terminals,
     )
+
+    gains = advantages + select_last_dim(rollout_values, 1:(nframes(rollout_values)-1))
     gains = send_to_device(device(AC), gains)
+    advantages = flatten_batch(advantages)
+    advantages = send_to_device(device(AC), advantages)
 
     ps = Flux.params(AC)
     gs = gradient(ps) do
@@ -80,7 +86,7 @@ function RLBase.update!(learner::A2CLearner, t::AbstractTrajectory)
         log_probs_select = log_probs[actions]
         values = AC.critic(states_flattened)
         advantage = vec(gains) .- vec(values)
-        actor_loss = -mean(log_probs_select .* Zygote.dropgrad(advantage))
+        actor_loss = -mean(log_probs_select .* advantages)
         critic_loss = mean(advantage .^ 2)
         entropy_loss = -sum(probs .* log_probs) * 1 // size(probs, 2)
         loss = w₁ * actor_loss + w₂ * critic_loss - w₃ * entropy_loss
@@ -92,13 +98,15 @@ function RLBase.update!(learner::A2CLearner, t::AbstractTrajectory)
         end
         loss
     end
+
     if !isnothing(learner.max_grad_norm)
         learner.norm = clip_by_global_norm!(gs, ps, learner.max_grad_norm)
     end
+
     update!(AC, gs)
 end
 
-function (agent::Agent{<:QBasedPolicy{<:A2CLearner},<:CircularCompactSARTSATrajectory})(
+function (agent::Agent{<:QBasedPolicy{<:A2CGAELearner},<:CircularCompactSARTSATrajectory})(
     ::Training{PreActStage},
     obs,
 )
