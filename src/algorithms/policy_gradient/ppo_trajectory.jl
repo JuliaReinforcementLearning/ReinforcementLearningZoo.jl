@@ -26,7 +26,7 @@ end
 
 MacroTools.@forward PPOTrajectory.trajectory Base.length, Base.isempty, RLCore.isfull
 
-function RLBase.get_trace(t::PPOTrajectory, s::Symbol)
+function RLCore.get_trace(t::PPOTrajectory, s::Symbol)
     if s == :action_log_prob
         select_last_dim(t.action_log_prob, 1:(nframes(t.action_log_prob) > 1 ? nframes(t.action_log_prob) - 1 : nframes(t.action_log_prob)))
     elseif s == :next_action_log_prob
