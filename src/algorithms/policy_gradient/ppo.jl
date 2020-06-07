@@ -17,11 +17,11 @@ mutable struct PPOLearner{A<:ActorCritic, R} <: AbstractLearner
     entropy_loss_weight::Float32
     rng::R
     # for logging
-    norm::Float32
-    actor_loss::Float32
-    critic_loss::Float32
-    entropy_loss::Float32
-    loss::Float32
+    norm::Matrix{Float32}
+    actor_loss::Matrix{Float32}
+    critic_loss::Matrix{Float32}
+    entropy_loss::Matrix{Float32}
+    loss::Matrix{Float32}
 end
 
 function PPOLearner(;
@@ -50,11 +50,11 @@ function PPOLearner(;
         critic_loss_weight,
         entropy_loss_weight,
         rng,
-        0.f0,
-        0.f0,
-        0.f0,
-        0.f0,
-        0.f0,
+        zeros(Float32, n_microbatches, n_epochs),
+        zeros(Float32, n_microbatches, n_epochs),
+        zeros(Float32, n_microbatches, n_epochs),
+        zeros(Float32, n_microbatches, n_epochs),
+        zeros(Float32, n_microbatches, n_epochs),
     )
 end
 
@@ -104,7 +104,7 @@ function RLBase.update!(learner::PPOLearner, t::PPOTrajectory)
     returns = advantages .+ select_last_dim(states_plus_values, 1:n_rollout)
 
     # TODO: normalize advantage
-    for _ in 1:n_epochs
+    for epoch in 1:n_epochs
         rand_inds = shuffle!(rng, Vector(1:n_envs * n_rollout))
         for i in 1:n_microbatches
             inds = rand_inds[(i-1)*microbatch_size+1:i*microbatch_size]
@@ -130,10 +130,18 @@ function RLBase.update!(learner::PPOLearner, t::PPOTrajectory)
                 critic_loss = mean((r .- v′).^2)
                 entropy_loss = - sum(p′ .* log_p′) * 1 // size(p′, 2)
                 loss = w₁ * actor_loss + w₂ * critic_loss - w₃ * entropy_loss
+
+                ignore() do
+                    learner.actor_loss[i, epoch] = actor_loss
+                    learner.critic_loss[i, epoch] = critic_loss
+                    learner.entropy_loss[i, epoch] = entropy_loss
+                    learner.loss[i, epoch] = loss
+                end
+
                 loss
             end
 
-            clip_by_global_norm!(gs, ps, learner.max_grad_norm)
+            learner.norm[i, epoch] = clip_by_global_norm!(gs, ps, learner.max_grad_norm)
             update!(AC, gs)
         end
     end
@@ -153,8 +161,7 @@ function (agent::Agent{<:QBasedPolicy{<:PPOLearner}, <:PPOTrajectory})(
     ::Testing{PreActStage},
     obs,
 )
-    action, action_log_prob = agent.policy(obs)
-    action
+    obs |> agent.policy.learner |> agent.policy.explorer
 end
 
 function (agent::Agent{<:QBasedPolicy{<:PPOLearner}, <:PPOTrajectory})(

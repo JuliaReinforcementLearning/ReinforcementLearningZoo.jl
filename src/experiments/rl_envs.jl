@@ -671,8 +671,8 @@ function RLCore.Experiment(::Val{:JuliaRL}, ::Val{:DDPG}, ::Val{:Pendulum}, ::No
 end
 
 function RLCore.Experiment(::Val{:JuliaRL}, ::Val{:PPO}, ::Val{:CartPole}, ::Nothing;)
-    N_ENV = 16
-    UPDATE_FREQ = 10
+    N_ENV = 8
+    UPDATE_FREQ = 16
     env = MultiThreadEnv([CartPoleEnv(; T = Float32, seed = i) for i in 1:N_ENV])
     ns, na = length(rand(get_observation_space(env[1]))), length(get_action_space(env[1]))
     RLBase.reset!(env, is_force = true)
