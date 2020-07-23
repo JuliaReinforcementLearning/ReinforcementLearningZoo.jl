@@ -102,8 +102,8 @@ end
     The state of the observation is assumed to have been stacked,
     if `!isnothing(stack_size)`.
 """
-(learner::PrioritizedDQNLearner)(obs) =
-    obs |>
+(learner::PrioritizedDQNLearner)(env) =
+    env |>
     get_state |>
     x ->
         Flux.unsqueeze(x, ndims(x) + 1) |>

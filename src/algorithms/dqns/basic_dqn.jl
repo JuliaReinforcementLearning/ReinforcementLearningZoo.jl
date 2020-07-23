@@ -35,8 +35,8 @@ Flux.functor(x::BasicDQNLearner) = (Q = x.approximator,), y -> begin
     x
 end
 
-(learner::BasicDQNLearner)(obs) =
-    obs |>
+(learner::BasicDQNLearner)(env) =
+    env |>
     get_state |>
     x ->
         send_to_device(device(learner.approximator), x) |>

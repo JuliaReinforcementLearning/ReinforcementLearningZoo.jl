@@ -75,14 +75,14 @@ function PPOLearner(;
     )
 end
 
-(learner::PPOLearner)(obs::BatchObs) =
+(learner::PPOLearner)(env::MultiThreadEnv) =
     learner.approximator.actor(send_to_device(
         device(learner.approximator),
-        get_state(obs),
+        get_state(env),
     )) |> send_to_host
 
-function (learner::PPOLearner)(obs)
-    s = get_state(obs)
+function (learner::PPOLearner)(env)
+    s = get_state(env)
     s = Flux.unsqueeze(s, ndims(s) + 1)
     s = send_to_device(device(learner.approximator), s)
     learner.approximator.actor(s) |> vec |> send_to_host
@@ -166,29 +166,29 @@ function RLBase.update!(learner::PPOLearner, t::PPOTrajectory)
     end
 end
 
-function (π::QBasedPolicy{<:PPOLearner})(obs::BatchObs)
-    action_values = π.learner(obs)
+function (π::QBasedPolicy{<:PPOLearner})(env::MultiThreadEnv)
+    action_values = π.learner(env)
     logits = logsoftmax(action_values)
     actions = π.explorer(action_values)
     actions_log_prob = logits[CartesianIndex.(actions, 1:size(action_values, 2))]
     actions, actions_log_prob
 end
 
-(π::QBasedPolicy{<:PPOLearner})(obs) = obs |> π.learner |> π.explorer
+(π::QBasedPolicy{<:PPOLearner})(env) = env |> π.learner |> π.explorer
 
 function (agent::Agent{<:QBasedPolicy{<:PPOLearner},<:PPOTrajectory})(
     ::Testing{PreActStage},
-    obs,
+    env,
 )
-    obs |> agent.policy.learner |> agent.policy.explorer
+    env |> agent.policy.learner |> agent.policy.explorer
 end
 
 function (agent::Agent{<:QBasedPolicy{<:PPOLearner},<:PPOTrajectory})(
     ::Training{PreActStage},
-    obs,
+    env,
 )
-    action, action_log_prob = agent.policy(obs)
-    state = get_state(obs)
+    action, action_log_prob = agent.policy(env)
+    state = get_state(env)
     push!(
         agent.trajectory;
         state = state,
@@ -213,8 +213,8 @@ end
 
 function (agent::Agent{<:QBasedPolicy{<:PPOLearner},<:PPOTrajectory})(
     ::Training{PostActStage},
-    obs,
+    env,
 )
-    push!(agent.trajectory; reward = get_reward(obs), terminal = get_terminal(obs))
+    push!(agent.trajectory; reward = get_reward(env), terminal = get_terminal(env))
     nothing
 end

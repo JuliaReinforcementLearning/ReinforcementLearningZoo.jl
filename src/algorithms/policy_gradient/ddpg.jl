@@ -90,14 +90,14 @@ function DDPGPolicy(;
 end
 
 # TODO: handle Training/Testing mode
-function (p::DDPGPolicy)(obs)
+function (p::DDPGPolicy)(env)
     p.step += 1
 
     if p.step <= p.start_steps
-        p.start_policy(obs)
+        p.start_policy(env)
     else
         D = device(p.behavior_actor)
-        s = get_state(obs)
+        s = get_state(env)
         s = Flux.unsqueeze(s, ndims(s) + 1)
         action = p.behavior_actor(send_to_device(D, s)) |> vec |> send_to_host
         clamp(action[] + randn(p.rng) * p.act_noise, -p.act_limit, p.act_limit)
