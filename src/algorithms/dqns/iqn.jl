@@ -62,7 +62,7 @@ See [paper](https://arxiv.org/abs/1806.06923)
 - `update_step = 0`,
 - `default_priority = 1.0f2`,
 - `β_priority = 0.5f0`,
-- `seed = nothing`,
+- `rng = Random.GLOBAL_RNG`,
 - `device_seed = nothing`,
 """
 mutable struct IQNLearner{A,T,R,D} <: AbstractLearner
@@ -118,17 +118,13 @@ function IQNLearner(;
     update_step = 0,
     default_priority = 1.0f2,
     β_priority = 0.5f0,
-    seed = nothing,
-    device_seed = nothing,
+    rng = Random.GLOBAL_RNG,
+    device_rng = CUDA.CURAND.RNG(),
     loss = 0.f0,
 )
     copyto!(approximator, target_approximator)  # force sync
-    rng = MersenneTwister(seed)
-    if device(approximator) === Val(:gpu)
-        device_rng = CUDA.CURAND.RNG()
-        Random.seed!(device_rng, device_seed)  # https://github.com/JuliaGPU/CUDA.jl/commit/43c12485182a6a7425c1fda0d2f66cc0eae8a2bf
-    else
-        device_rng = rng
+    if device(approximator) !== device(device_rng)
+        throw(ArgumentError("device of `approximator` doesn't match with the device of `device_rng`: $(device(approximator)) !== $(device_rng)"))
     end
     IQNLearner(
         approximator,

@@ -17,7 +17,7 @@ See paper: [Human-level control through deep reinforcement learning](https://www
 - `update_freq::Int=4`: the frequency of updating the `approximator`.
 - `target_update_freq::Int=100`: the frequency of syncing `target_approximator`.
 - `stack_size::Union{Int, Nothing}=4`: use the recent `stack_size` frames to form a stacked state.
-- `seed = nothing`
+- `rng = Random.GLOBAL_RNG`
 """
 mutable struct DQNLearner{
     Tq<:AbstractApproximator,
@@ -53,10 +53,9 @@ function DQNLearner(;
     update_freq::Int = 1,
     target_update_freq::Int = 100,
     update_step::Int = 0,
-    seed = nothing,
+    rng = Random.GLOBAL_RNG,
 ) where {Tq,Tt,Tf}
     copyto!(approximator, target_approximator)
-    rng = MersenneTwister(seed)
     DQNLearner(
         approximator,
         target_approximator,

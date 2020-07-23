@@ -49,7 +49,7 @@ function RLCore.Experiment(
     save_dir = nothing,
 )
     if isnothing(save_dir)
-        t = Dates.format(now(), "yyyymmddHHMMSS")
+        t = Dates.format(now(), "yyyy_mm_dd_HH_MM_SS")
         save_dir = joinpath(pwd(), "checkpoints", "dopamine_DQN_atari_$(name)_$(t)")
     end
 
@@ -58,7 +58,7 @@ function RLCore.Experiment(
     N_FRAMES = 4
     STATE_SIZE = (84, 84)
     env = atari_env_factory(name, STATE_SIZE, N_FRAMES;)#= seed=nothing =#
-    N_ACTIONS = length(get_action_space(env))
+    N_ACTIONS = length(get_actions(env))
     init = seed_glorot_uniform()#= seed=341 =#
 
     create_model() =
@@ -113,18 +113,18 @@ function RLCore.Experiment(
     hook = ComposedHook(
         total_reward_per_episode,
         time_per_step,
-        DoEveryNStep() do t, agent, env, obs
+        DoEveryNStep() do t, agent, env
             with_logger(lg) do
                 @info "training" loss = agent.policy.learner.loss
             end
         end,
-        DoEveryNEpisode() do t, agent, env, obs
+        DoEveryNEpisode() do t, agent, env
             with_logger(lg) do
                 @info "training" reward = total_reward_per_episode.rewards[end] log_step_increment =
                     0
             end
         end,
-        DoEveryNStep(EVALUATION_FREQ) do t, agent, env, obs
+        DoEveryNStep(EVALUATION_FREQ) do t, agent, env
             @info "evaluating agent at $t step..."
             flush(stdout)
             Flux.testmode!(agent)
@@ -195,7 +195,7 @@ function RLCore.Experiment(
     save_dir = nothing,
 )
     if isnothing(save_dir)
-        t = Dates.format(now(), "yyyymmddHHMMSS")
+        t = Dates.format(now(), "yyyy_mm_dd_HH_MM_SS")
         save_dir = joinpath(pwd(), "checkpoints", "Dopamine_Rainbow_Atari_$(name)_$(t)")
     end
 
@@ -204,7 +204,7 @@ function RLCore.Experiment(
     N_FRAMES = 4
     STATE_SIZE = (84, 84)
     env = atari_env_factory(name, STATE_SIZE, N_FRAMES;)#= seed=(135, 246) =#
-    N_ACTIONS = length(get_action_space(env))
+    N_ACTIONS = length(get_actions(env))
     N_ATOMS = 51
     init = seed_glorot_uniform()#= seed=341 =#
 
@@ -268,18 +268,18 @@ function RLCore.Experiment(
         total_reward_per_episode,
         time_per_step,
         steps_per_episode,
-        DoEveryNStep() do t, agent, env, obs
+        DoEveryNStep() do t, agent, env
             with_logger(lg) do
                 @info "training" loss = agent.policy.learner.loss
             end
         end,
-        DoEveryNEpisode() do t, agent, env, obs
+        DoEveryNEpisode() do t, agent, env
             with_logger(lg) do
                 @info "training" reward = total_reward_per_episode.rewards[end] episode_length =
                     steps_per_episode.steps[end] log_step_increment = 0
             end
         end,
-        DoEveryNStep(EVALUATION_FREQ) do t, agent, env, obs
+        DoEveryNStep(EVALUATION_FREQ) do t, agent, env
             @info "evaluating agent at $t step..."
             flush(stdout)
             Flux.testmode!(agent)
@@ -349,7 +349,7 @@ function RLCore.Experiment(
     save_dir = nothing,
 )
     if isnothing(save_dir)
-        t = Dates.format(now(), "yyyymmddHHMMSS")
+        t = Dates.format(now(), "yyyy_mm_dd_HH_MM_SS")
         save_dir = joinpath(pwd(), "checkpoints", "Dopamine_IQN_Atari_$(name)_$(t)")
     end
 
@@ -360,7 +360,7 @@ function RLCore.Experiment(
     MAX_STEPS_PER_EPISODE = 27_000
 
     env = atari_env_factory(name, STATE_SIZE, N_FRAMES;)#= seed=(135, 246) =#
-    N_ACTIONS = length(get_action_space(env))
+    N_ACTIONS = length(get_actions(env))
     Nₑₘ = 64
 
     init = seed_glorot_uniform()#= seed=341 =#
@@ -429,18 +429,18 @@ function RLCore.Experiment(
         total_reward_per_episode,
         time_per_step,
         steps_per_episode,
-        DoEveryNStep() do t, agent, env, obs
+        DoEveryNStep() do t, agent, env
             with_logger(lg) do
                 @info "training" loss = agent.policy.learner.loss
             end
         end,
-        DoEveryNEpisode() do t, agent, env, obs
+        DoEveryNEpisode() do t, agent, env
             with_logger(lg) do
                 @info "training" reward = total_reward_per_episode.rewards[end] episode_length =
                     steps_per_episode.steps[end] log_step_increment = 0
             end
         end,
-        DoEveryNStep(EVALUATION_FREQ) do t, agent, env, obs
+        DoEveryNStep(EVALUATION_FREQ) do t, agent, env
             @info "evaluating agent at $t step..."
             flush(stdout)
             Flux.testmode!(agent)
@@ -510,7 +510,7 @@ function RLCore.Experiment(
     save_dir = nothing,
 )
     if isnothing(save_dir)
-        t = Dates.format(now(), "yyyymmddHHMMSS")
+        t = Dates.format(now(), "yyyy_mm_dd_HH_MM_SS")
         save_dir = joinpath(pwd(), "checkpoints", "JuliaRL_A2C_Atari_$(name)_$(t)")
     end
 
@@ -521,7 +521,7 @@ function RLCore.Experiment(
     N_FRAMES = 4
     STATE_SIZE = (84, 84)
     env = MultiThreadEnv([atari_env_factory(name, STATE_SIZE, N_FRAMES;) for i in 1:N_ENV]) #= seed = i =#
-    N_ACTIONS = length(get_action_space(env[1]))
+    N_ACTIONS = length(get_actions(env[1]))
 
     init = seed_glorot_uniform()#= seed=341 =#
 
@@ -577,7 +577,7 @@ function RLCore.Experiment(
     hook = ComposedHook(
         total_batch_reward_per_episode,
         batch_steps_per_episode,
-        DoEveryNStep(UPDATE_FREQ) do t, agent, env, obs
+        DoEveryNStep(UPDATE_FREQ) do t, agent, env
             learner = agent.policy.learner
             with_logger(lg) do
                 @info "training" loss = learner.loss actor_loss = learner.actor_loss critic_loss =
@@ -585,7 +585,7 @@ function RLCore.Experiment(
                     learner.norm log_step_increment = UPDATE_FREQ
             end
         end,
-        DoEveryNStep() do t, agent, env, obs
+        DoEveryNStep() do t, agent, env
             with_logger(lg) do
                 rewards = [
                     total_batch_reward_per_episode.rewards[i][end]
@@ -603,7 +603,7 @@ function RLCore.Experiment(
                 end
             end
         end,
-        DoEveryNStep(EVALUATION_FREQ) do t, agent, env, obs
+        DoEveryNStep(EVALUATION_FREQ) do t, agent, env
             @info "evaluating agent at $t step..."
             flush(stdout)
             Flux.testmode!(agent)
@@ -654,7 +654,7 @@ function RLCore.Experiment(
     save_dir = nothing,
 )
     if isnothing(save_dir)
-        t = Dates.format(now(), "yyyymmddHHMMSS")
+        t = Dates.format(now(), "yyyy_mm_dd_HH_MM_SS")
         save_dir = joinpath(pwd(), "checkpoints", "JuliaRL_A2CGAE_Atari_$(name)_$(t)")
     end
 
@@ -665,7 +665,7 @@ function RLCore.Experiment(
     N_FRAMES = 4
     STATE_SIZE = (84, 84)
     env = MultiThreadEnv([atari_env_factory(name, STATE_SIZE, N_FRAMES;) for i in 1:N_ENV]) #= seed = i =#
-    N_ACTIONS = length(get_action_space(env[1]))
+    N_ACTIONS = length(get_actions(env[1]))
 
     init = seed_glorot_uniform()#= seed=341 =#
 
@@ -722,7 +722,7 @@ function RLCore.Experiment(
     hook = ComposedHook(
         total_batch_reward_per_episode,
         batch_steps_per_episode,
-        DoEveryNStep(UPDATE_FREQ) do t, agent, env, obs
+        DoEveryNStep(UPDATE_FREQ) do t, agent, env
             learner = agent.policy.learner
             with_logger(lg) do
                 @info "training" loss = learner.loss actor_loss = learner.actor_loss critic_loss =
@@ -730,7 +730,7 @@ function RLCore.Experiment(
                     learner.norm log_step_increment = UPDATE_FREQ
             end
         end,
-        DoEveryNStep() do t, agent, env, obs
+        DoEveryNStep() do t, agent, env
             with_logger(lg) do
                 rewards = [
                     total_batch_reward_per_episode.rewards[i][end]
@@ -748,7 +748,7 @@ function RLCore.Experiment(
                 end
             end
         end,
-        DoEveryNStep(EVALUATION_FREQ) do t, agent, env, obs
+        DoEveryNStep(EVALUATION_FREQ) do t, agent, env
             @info "evaluating agent at $t step..."
             flush(stdout)
             Flux.testmode!(agent)
@@ -799,7 +799,7 @@ function RLCore.Experiment(
     save_dir = nothing,
 )
     if isnothing(save_dir)
-        t = Dates.format(now(), "yyyymmddHHMMSS")
+        t = Dates.format(now(), "yyyy_mm_dd_HH_MM_SS")
         save_dir = joinpath(pwd(), "checkpoints", "JuliaRL_PPO_Atari_$(name)_$(t)")
     end
 
@@ -810,7 +810,7 @@ function RLCore.Experiment(
     N_FRAMES = 4
     STATE_SIZE = (84, 84)
     env = MultiThreadEnv([atari_env_factory(name, STATE_SIZE, N_FRAMES;) for i in 1:N_ENV]) #= seed = i =#
-    N_ACTIONS = length(get_action_space(env[1]))
+    N_ACTIONS = length(get_actions(env[1]))
     INIT_CLIP_RANGE = 0.1f0
     INIT_LEARNING_RATE = 1e-3
 
@@ -874,7 +874,7 @@ function RLCore.Experiment(
     hook = ComposedHook(
         total_batch_reward_per_episode,
         batch_steps_per_episode,
-        DoEveryNStep(UPDATE_FREQ) do t, agent, env, obs
+        DoEveryNStep(UPDATE_FREQ) do t, agent, env
             learner = agent.policy.learner
             with_logger(lg) do
                 @info "training" loss = mean(learner.loss) actor_loss =
@@ -883,13 +883,13 @@ function RLCore.Experiment(
                     UPDATE_FREQ
             end
         end,
-        DoEveryNStep(UPDATE_FREQ) do t, agent, env, obs
+        DoEveryNStep(UPDATE_FREQ) do t, agent, env
             decay = (N_TRAINING_STEPS - t) / N_TRAINING_STEPS
             agent.policy.learner.approximator.optimizer.eta =
                 INIT_LEARNING_RATE * decay
             agent.policy.learner.clip_range = INIT_CLIP_RANGE * Float32(decay)
         end,
-        DoEveryNStep() do t, agent, env, obs
+        DoEveryNStep() do t, agent, env
             with_logger(lg) do
                 rewards = [
                     total_batch_reward_per_episode.rewards[i][end]
@@ -907,7 +907,7 @@ function RLCore.Experiment(
                 end
             end
         end,
-        DoEveryNStep(EVALUATION_FREQ) do t, agent, env, obs
+        DoEveryNStep(EVALUATION_FREQ) do t, agent, env
             @info "evaluating agent at $t step..."
             flush(stdout)
             Flux.testmode!(agent)

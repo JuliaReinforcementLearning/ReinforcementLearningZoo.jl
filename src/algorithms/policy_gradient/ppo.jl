@@ -19,7 +19,7 @@ export PPOLearner
 - `actor_loss_weight = 1.0f0`,
 - `critic_loss_weight = 0.5f0`,
 - `entropy_loss_weight = 0.01f0`,
-- `seed = nothing`,
+- `rng = Random.GLOBAL_RNG`,
 """
 mutable struct PPOLearner{A<:ActorCritic,R} <: AbstractLearner
     approximator::A
@@ -52,9 +52,8 @@ function PPOLearner(;
     actor_loss_weight = 1.0f0,
     critic_loss_weight = 0.5f0,
     entropy_loss_weight = 0.01f0,
-    seed = nothing,
+    rng = Random.GLOBAL_RNG,
 )
-    rng = MersenneTwister(seed)
     PPOLearner(
         approximator,
         γ,

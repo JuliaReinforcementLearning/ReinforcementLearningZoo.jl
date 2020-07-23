@@ -48,7 +48,7 @@ end
 - `act_limit = 1.0`,
 - `act_noise = 0.1`,
 - `step = 0`,
-- `seed = nothing`,
+- `rng = Random.GLOBAL_RNG`,
 """
 function DDPGPolicy(;
     behavior_actor,
@@ -65,9 +65,8 @@ function DDPGPolicy(;
     act_limit = 1.0,
     act_noise = 0.1,
     step = 0,
-    seed = nothing,
+    rng = Random.GLOBAL_RNG,
 )
-    rng = MersenneTwister(seed)
     copyto!(behavior_actor, target_actor)  # force sync
     copyto!(behavior_critic, target_critic)  # force sync
     DDPGPolicy(
