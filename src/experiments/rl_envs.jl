@@ -514,8 +514,7 @@ function RLCore.Experiment(
     rng = MersenneTwister(seed)
     N_ENV = 16
     UPDATE_FREQ = 10
-    # !!! not a best pratice to set the seed like this
-    env = MultiThreadEnv([CartPoleEnv(; T = Float32, rng=MersenneTwister(seed+i)) for i in 1:N_ENV])
+    env = MultiThreadEnv([CartPoleEnv(; T = Float32, rng=MersenneTwister(hash(seed+i))) for i in 1:N_ENV])
     ns, na = length(get_state(env[1])), length(get_actions(env[1]))
     RLBase.reset!(env, is_force = true)
     agent = Agent(
@@ -569,8 +568,7 @@ function RLCore.Experiment(
     rng = MersenneTwister(seed)
     N_ENV = 16
     UPDATE_FREQ = 10
-    # !!! not a best pratice to set the seed like this
-    env = MultiThreadEnv([CartPoleEnv(; T = Float32, rng=MersenneTwister(seed+i)) for i in 1:N_ENV])
+    env = MultiThreadEnv([CartPoleEnv(; T = Float32, rng=MersenneTwister(hash(seed+i))) for i in 1:N_ENV])
     ns, na = length(get_state(env[1])), length(get_actions(env[1]))
     RLBase.reset!(env, is_force = true)
     agent = Agent(
@@ -692,8 +690,7 @@ function RLCore.Experiment(::Val{:JuliaRL}, ::Val{:PPO}, ::Val{:CartPole}, ::Not
     rng = MersenneTwister(seed)
     N_ENV = 8
     UPDATE_FREQ = 16
-    # !!! not a best pratice to set the seed like this
-    env = MultiThreadEnv([CartPoleEnv(; T = Float32, rng=MersenneTwister(seed+i)) for i in 1:N_ENV])
+    env = MultiThreadEnv([CartPoleEnv(; T = Float32, rng=MersenneTwister(hash(seed+i))) for i in 1:N_ENV])
     ns, na = length(get_state(env[1])), length(get_actions(env[1]))
     RLBase.reset!(env, is_force = true)
     agent = Agent(
