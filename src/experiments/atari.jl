@@ -796,6 +796,7 @@ function RLCore.Experiment(
             @info "evaluating agent at $t step..."
             flush(stdout)
             Flux.testmode!(agent)
+            # switch to GreedyExplorer?
             h = TotalBatchRewardPerEpisode(N_ENV)
             s = @elapsed run(
                 agent,

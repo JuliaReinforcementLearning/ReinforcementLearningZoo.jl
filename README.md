@@ -39,12 +39,13 @@ Some built-in experiments are exported to help new users to easily run benchmark
 - ``E`JuliaRL_A2CGAE_CartPole` ``
 - ``E`JuliaRL_PPO_CartPole` ``
 - ``E`JuliaRL_DDPG_Pendulum` ``
+- ``E`JuliaRL_BasicDQN_MountainCar` `` (Thanks to [@felixchalumeau](https://github.com/felixchalumeau))
+- ``E`JuliaRL_DQN_MountainCar` `` (Thanks to [@felixchalumeau](https://github.com/felixchalumeau))
 - ``E`Dopamine_DQN_Atari(pong)` ``
 - ``E`Dopamine_Rainbow_Atari(pong)` ``
 - ``E`Dopamine_IQN_Atari(pong)` ``
-- ``E`JuliaRL_A2C_Atari(pong)` ``
-- ``E`JuliaRL_A2CGAE_Atari(pong)` ``
-- ``E`JuliaRL_PPO_Atari(pong)` ``
+- ``E`rlpyt_A2C_Atari(pong)` ``
+- ``E`rlpyt_PPO_Atari(pong)` ``
 
 **Notes:**
 
