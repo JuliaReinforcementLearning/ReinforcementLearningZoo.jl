@@ -52,5 +52,5 @@ Some built-in experiments are exported to help new users to easily run benchmark
 - Experiments on `CartPole` usually run faster with CPU only due to the overhead of sending data between CPU and GPU.
 - It shouldn't surprise you that our experiments on `CartPole` are much faster than those written in Python. The secret is that our environment is written in Julia!
 - Remember to set `JULIA_NUM_THREADS` to enable multi-threading when using algorithms like `A2C` and `PPO`.
-- Experiments on `Atari` are only availabe when you have `ArcadeLearningEnvironment.jl` installed and `using ArcadeLearningEnvironment`.
+- Experiments on `Atari` are only available when you have `ArcadeLearningEnvironment.jl` installed and `using ArcadeLearningEnvironment`.
 - Different configurations might affect the performance a lot. According to our tests, our implementations are generally comparable to those written in PyTorch or TensorFlow with the same configuration (sometimes we are significantly faster).
