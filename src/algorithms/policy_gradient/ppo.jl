@@ -90,12 +90,12 @@ end
 function RLBase.update!(learner::PPOLearner, t::PPOTrajectory)
     isfull(t) || return
 
-    states = get_trace(t, :state)
-    actions = get_trace(t, :action)
-    action_log_probs = get_trace(t, :action_log_prob)
-    rewards = get_trace(t, :reward)
-    terminals = get_trace(t, :terminal)
-    states_plus = t[:state]
+    states = t[:state]
+    actions = t[:action]
+    action_log_probs = t[:action_log_prob]
+    rewards = t[:reward]
+    terminals = t[:terminal]
+    states_plus = t[:full_state]
 
     rng = learner.rng
     AC = learner.approximator
