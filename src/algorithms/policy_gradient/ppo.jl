@@ -126,7 +126,7 @@ function RLBase.update!(learner::PPOLearner, t::PPOTrajectory)
         rand_inds = shuffle!(rng, Vector(1:n_envs*n_rollout))
         for i in 1:n_microbatches
             inds = rand_inds[(i-1)*microbatch_size+1:i*microbatch_size]
-            s = send_to_device(D, select_last_dim(states_flatten, inds) |> copy)  # !!! must copy here
+            s = send_to_device(D, select_last_dim(states_flatten, inds))
             a = vec(actions)[inds]
             r = send_to_device(D, vec(returns)[inds])
             log_p = send_to_device(D, vec(action_log_probs)[inds])
