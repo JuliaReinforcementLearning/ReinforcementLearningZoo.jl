@@ -972,17 +972,25 @@ function RLCore.Experiment(
     env = inner_env |> ActionTransformedEnv(x -> low + (x + 1) * 0.5 * (high - low))
     init = glorot_uniform(rng)
 
-
     create_policy_net() = NeuralNetworkApproximator(
-        model = create_sac_policy_network(ns, 1, init, hidden_layer1 = 64, hidden_layer2 = 32),
+        model = SACPolicyNetwork(
+            Chain(Dense(ns, 30, relu), Dense(30, 30, relu)),
+            Chain(Dense(30, 1, initW = init)),
+            Chain(Dense(
+                30,
+                1,
+                x -> min(max(x, typeof(x)(-20)), typeof(x)(2)),
+                initW = init,
+            )),
+        ),
         optimizer = ADAM(0.003),
     )
 
     create_q_net() = NeuralNetworkApproximator(
         model = Chain(
-            Dense(ns + 1, 64, relu; initW = init),
-            Dense(64, 32, relu; initW = init),
-            Dense(32, 1; initW = init),
+            Dense(ns + 1, 30, relu; initW = init),
+            Dense(30, 30, relu; initW = init),
+            Dense(30, 1; initW = init),
         ),
         optimizer = ADAM(0.003),
     )

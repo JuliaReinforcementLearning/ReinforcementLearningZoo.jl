@@ -1,39 +1,18 @@
-export SACPolicy, SAC_policy_network, create_sac_policy_network
+export SACPolicy, SACPolicyNetwork
 
 using Random
 using Flux
 using Flux.Losses: mse
 using Distributions: Normal, logpdf
 
-#### SAC models
-struct SAC_policy_network
-    pre::Any
-    mean::Any
-    log_std::Any
+# Define SAC Actor
+struct SACPolicyNetwork
+    pre::Chain
+    mean::Chain
+    log_std::Chain
 end
-Flux.@functor SAC_policy_network
-(m::SAC_policy_network)(state) = (x = m.pre(state); (m.mean(x), m.log_std(x)))
-
-function create_sac_policy_network(
-    STATE_SIZE,
-    ACTION_SIZE,
-    f_init;
-    hidden_layer1 = 256,
-    hidden_layer2 = 256,
-    log_std_min = -20f0,
-    log_std_max = 2f0,
-)
-    p = SAC_policy_network(
-        Chain(Dense(STATE_SIZE, hidden_layer1, relu), Dense(hidden_layer1, hidden_layer2, relu)),
-        Chain(Dense(hidden_layer2, ACTION_SIZE, initW = f_init)),
-        Chain(Dense(
-            hidden_layer2,
-            ACTION_SIZE,
-            x -> min(max(x, typeof(x)(log_std_min)), typeof(x)(log_std_max)),
-            initW = f_init,
-        )),
-    )
-end
+Flux.@functor SACPolicyNetwork
+(m::SACPolicyNetwork)(state) = (x = m.pre(state); (m.mean(x), m.log_std(x)))
 
 mutable struct SACPolicy{
     BA<:NeuralNetworkApproximator,
@@ -120,7 +99,6 @@ function SACPolicy(;
 end
 
 # TODO: handle Training/Testing mode
-# TODO: if testing act deterministic
 function (p::SACPolicy)(env)
     p.step += 1
 
@@ -131,21 +109,22 @@ function (p::SACPolicy)(env)
         s = get_state(env)
         s = Flux.unsqueeze(s, ndims(s) + 1)
         # trainmode:
-        action = evaluate(p, s)[1][]
+        action = evaluate(p, s)[1][] # returns action as scalar
 
+        # testmode:
         # if testing dont sample an action, but act deterministically by
         # taking the "mean" action
-        #action = p.policy(s)[1]
+        # action = p.policy(s)[1][] # returns action as scalar
     end
 end
 
 """
-This function is compatible with a vector action space
+This function is compatible with a multidimensional action space.
 """
 function evaluate(p::SACPolicy, state)
     μ, log_σ = p.policy(state)
     π_dist = Normal.(μ, exp.(log_σ))
-    z = rand.(π_dist)
+    z = rand.(p.rng, π_dist)
     logp_π = sum(logpdf.(π_dist, z), dims = 1)
     logp_π -= sum((2f0 .* (log(2f0) .- z - softplus.(-2f0 * z))), dims = 1)
     return tanh.(z), logp_π
@@ -198,7 +177,10 @@ function RLBase.update!(p::SACPolicy, traj::CircularCompactSARTSATrajectory)
     update!(p.policy, p_grad)
 
     # polyak averaging
-    for (dest, src) in zip(Flux.params([p.target_qnetwork1, p.target_qnetwork2]), Flux.params([p.qnetwork1, p.qnetwork2]))
+    for (dest, src) in zip(
+        Flux.params([p.target_qnetwork1, p.target_qnetwork2]),
+        Flux.params([p.qnetwork1, p.qnetwork2]),
+    )
         dest .= ρ .* dest .+ (1 - ρ) .* src
     end
 end
