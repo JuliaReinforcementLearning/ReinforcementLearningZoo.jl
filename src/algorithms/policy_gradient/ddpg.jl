@@ -1,9 +1,9 @@
-export DDPGPolicy
+export DDPGLearner
 
 using Random
 using Flux
 
-mutable struct DDPGPolicy{
+mutable struct DDPGLearner{
     BA<:NeuralNetworkApproximator,
     BC<:NeuralNetworkApproximator,
     TA<:NeuralNetworkApproximator,
@@ -30,7 +30,7 @@ mutable struct DDPGPolicy{
 end
 
 """
-    DDPGPolicy(;kwargs...)
+    DDPGLearner(;kwargs...)
 
 # Keyword arguments
 
@@ -50,7 +50,7 @@ end
 - `step = 0`,
 - `rng = Random.GLOBAL_RNG`,
 """
-function DDPGPolicy(;
+function DDPGLearner(;
     behavior_actor,
     behavior_critic,
     target_actor,
@@ -69,7 +69,7 @@ function DDPGPolicy(;
 )
     copyto!(behavior_actor, target_actor)  # force sync
     copyto!(behavior_critic, target_critic)  # force sync
-    DDPGPolicy(
+    DDPGLearner(
         behavior_actor,
         behavior_critic,
         target_actor,
@@ -89,38 +89,38 @@ function DDPGPolicy(;
 end
 
 # TODO: handle Training/Testing mode
-function (p::DDPGPolicy)(env)
-    p.step += 1
+function (learner::DDPGLearner)(env)
+    learner.step += 1
 
-    if p.step <= p.start_steps
-        p.start_policy(env)
+    if learner.step <= learner.start_steps
+        learner.start_policy(env)
     else
-        D = device(p.behavior_actor)
+        D = device(learner.behavior_actor)
         s = get_state(env)
         s = Flux.unsqueeze(s, ndims(s) + 1)
-        action = p.behavior_actor(send_to_device(D, s)) |> vec |> send_to_host
-        clamp(action[] + randn(p.rng) * p.act_noise, -p.act_limit, p.act_limit)
+        action = learner.behavior_actor(send_to_device(D, s)) |> vec |> send_to_host
+        clamp(action[] + randn(learner.rng) * learner.act_noise, -learner.act_limit, learner.act_limit)
     end
 end
 
-function RLBase.update!(p::DDPGPolicy, traj::CircularCompactSARTSATrajectory)
-    length(traj[:terminal]) > p.update_after || return
-    p.step % p.update_every == 0 || return
+function RLBase.update!(learner::DDPGLearner, traj::CircularCompactSARTSATrajectory)
+    length(traj[:terminal]) > learner.update_after || return
+    learner.step % learner.update_every == 0 || return
 
-    inds = rand(p.rng, 1:(length(traj[:terminal])-1), p.batch_size)
+    inds = rand(learner.rng, 1:(length(traj[:terminal])-1), learner.batch_size)
     s = select_last_dim(traj[:state], inds)
     a = select_last_dim(traj[:action], inds)
     r = select_last_dim(traj[:reward], inds)
     t = select_last_dim(traj[:terminal], inds)
     s′ = select_last_dim(traj[:next_state], inds)
 
-    A = p.behavior_actor
-    C = p.behavior_critic
-    Aₜ = p.target_actor
-    Cₜ = p.target_critic
+    A = learner.behavior_actor
+    C = learner.behavior_critic
+    Aₜ = learner.target_actor
+    Cₜ = learner.target_critic
 
-    γ = p.γ
-    ρ = p.ρ
+    γ = learner.γ
+    ρ = learner.ρ
 
 
     # !!! we have several assumptions here, need revisit when we have more complex environments
