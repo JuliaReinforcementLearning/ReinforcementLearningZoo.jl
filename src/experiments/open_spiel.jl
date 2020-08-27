@@ -21,9 +21,9 @@ function RLCore.Experiment(
     ::Val{:CFRPolicy},
     ::Val{:OpenSpiel},
     game;
-    n_inter=300
+    n_iter=300
 )
-    env = OpenSpielEnv(game;default_state_type=RLBase.Information{String}, is_chance_agent_required=true)
+    env = OpenSpielEnv(game;default_state_style=RLBase.Information{String}(), is_chance_agent_required=true)
     π = CFRPolicy(;n_iter=n_iter, env)
 
     agents = map(get_players(env)) do p
@@ -34,9 +34,9 @@ function RLCore.Experiment(
         end
     end
 
-    hooks = (TotalRewardPerEpisode() for _ in get_players())
+    hooks = [p == get_chance_player(env) ? EmptyHook() : TotalRewardPerEpisode() for p in get_players(env)]
     description="""
     # Play `$game` in OpenSpiel with CFRPolicy
     """
-    Experiment(agents, env, StopAfterEpisode(1), hooks, description)
+    Experiment(agents, env, StopAfterEpisode(10_000), hooks, description)
 end
