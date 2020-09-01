@@ -101,7 +101,7 @@ function RLCore.Experiment(
     The testing environment is CartPoleEnv.
     """
 
-    Experiment(agent, env, stop_condition, hook, Description(description,save_dir))
+    Experiment(agent, env, stop_condition, hook, Description(description, save_dir))
 end
 
 function RLCore.Experiment(
@@ -194,7 +194,7 @@ function RLCore.Experiment(
     The testing environment is CartPoleEnv.
     """
 
-    Experiment(agent, env, stop_condition, hook, Description(description,save_dir))
+    Experiment(agent, env, stop_condition, hook, Description(description, save_dir))
 end
 
 function RLCore.Experiment(
@@ -283,7 +283,7 @@ function RLCore.Experiment(
     The testing environment is CartPoleEnv.
     """
 
-    Experiment(agent, env, stop_condition, hook, Description(description,save_dir))
+    Experiment(agent, env, stop_condition, hook, Description(description, save_dir))
 end
 
 function RLCore.Experiment(
@@ -383,7 +383,7 @@ function RLCore.Experiment(
     The testing environment is CartPoleEnv.
     """
 
-    Experiment(agent, env, stop_condition, hook, Description(description,save_dir))
+    Experiment(agent, env, stop_condition, hook, Description(description, save_dir))
 end
 
 function RLCore.Experiment(
@@ -416,7 +416,6 @@ function RLCore.Experiment(
             ϕ = Dense(Nₑₘ, n_hidden, relu; initW = init),
             header = Dense(n_hidden, na; initW = init),
         ) |> cpu
-
 
     agent = Agent(
         policy = QBasedPolicy(
@@ -481,7 +480,7 @@ function RLCore.Experiment(
     The testing environment is CartPoleEnv.
     """
 
-    Experiment(agent, env, stop_condition, hook, Description(description,save_dir))
+    Experiment(agent, env, stop_condition, hook, Description(description, save_dir))
 end
 
 function RLCore.Experiment(
@@ -502,7 +501,7 @@ function RLCore.Experiment(
     N_ENV = 16
     UPDATE_FREQ = 10
     env = MultiThreadEnv([
-        CartPoleEnv(; T = Float32, rng = MersenneTwister(hash(seed + i))) for i in 1:N_ENV
+        CartPoleEnv(; T = Float32, rng = MersenneTwister(hash(seed + i))) for i = 1:N_ENV
     ])
     ns, na = length(get_state(env[1])), length(get_actions(env[1]))
     RLBase.reset!(env, is_force = true)
@@ -566,7 +565,13 @@ function RLCore.Experiment(
             BSON.@save joinpath(save_dir, "stats.bson") total_reward_per_episode time_per_step
         end,
     )
-    Experiment(agent, env, stop_condition, hook, Description("# A2C with CartPole",save_dir))
+    Experiment(
+        agent,
+        env,
+        stop_condition,
+        hook,
+        Description("# A2C with CartPole", save_dir),
+    )
 end
 
 function RLCore.Experiment(
@@ -587,7 +592,7 @@ function RLCore.Experiment(
     N_ENV = 16
     UPDATE_FREQ = 10
     env = MultiThreadEnv([
-        CartPoleEnv(; T = Float32, rng = MersenneTwister(hash(seed + i))) for i in 1:N_ENV
+        CartPoleEnv(; T = Float32, rng = MersenneTwister(hash(seed + i))) for i = 1:N_ENV
     ])
     ns, na = length(get_state(env[1])), length(get_actions(env[1]))
     RLBase.reset!(env, is_force = true)
@@ -761,8 +766,13 @@ function RLCore.Experiment(
         end,
     )
 
-    Experiment(agent, env, stop_condition, hook,
-        Description("# Play Pendulum with DDPG", save_dir))
+    Experiment(
+        agent,
+        env,
+        stop_condition,
+        hook,
+        Description("# Play Pendulum with DDPG", save_dir),
+    )
 end
 
 function RLCore.Experiment(
@@ -783,7 +793,7 @@ function RLCore.Experiment(
     N_ENV = 8
     UPDATE_FREQ = 16
     env = MultiThreadEnv([
-        CartPoleEnv(; T = Float32, rng = MersenneTwister(hash(seed + i))) for i in 1:N_ENV
+        CartPoleEnv(; T = Float32, rng = MersenneTwister(hash(seed + i))) for i = 1:N_ENV
     ])
     ns, na = length(get_state(env[1])), length(get_actions(env[1]))
     RLBase.reset!(env, is_force = true)
@@ -841,9 +851,10 @@ function RLCore.Experiment(
         time_per_step,
         DoEveryNStep() do t, agent, env
             with_logger(lg) do
-                @info "training" actor_loss = agent.policy.learner.actor_loss[end,end]
-                @info "training" critic_loss = agent.policy.learner.critic_loss[end,end]
-                @info "training" loss = agent.policy.learner.loss[end,end]
+                @info "training" actor_loss = agent.policy.learner.actor_loss[end, end]
+                @info "training" critic_loss =
+                    agent.policy.learner.critic_loss[end, end]
+                @info "training" loss = agent.policy.learner.loss[end, end]
                 @info "training" reward = total_reward_per_episode.reward[end]
             end
         end,
@@ -944,7 +955,7 @@ function RLCore.Experiment(
     The testing environment is MountainCarEnv.
     """
 
-    Experiment(agent, env, stop_condition, hook, Description(description,save_dir))
+    Experiment(agent, env, stop_condition, hook, Description(description, save_dir))
 end
 
 function RLCore.Experiment(
@@ -1038,7 +1049,7 @@ function RLCore.Experiment(
     The testing environment is MountainCarEnv.
     """
 
-    Experiment(agent, env, stop_condition, hook, Description(description,save_dir))
+    Experiment(agent, env, stop_condition, hook, Description(description, save_dir))
 end
 
 function RLCore.Experiment(
@@ -1130,5 +1141,11 @@ function RLCore.Experiment(
         end,
     )
 
-    Experiment(agent, env, stop_condition, hook, Description("# Play Pendulum with SAC",save_dir))
+    Experiment(
+        agent,
+        env,
+        stop_condition,
+        hook,
+        Description("# Play Pendulum with SAC", save_dir),
+    )
 end
