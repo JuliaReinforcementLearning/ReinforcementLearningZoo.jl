@@ -59,4 +59,22 @@ using Random
                 e.hook[1].rewards[end]
         end
     end
+
+    @testset "minimax" begin
+        e = E`JuliaRL_Minimax_OpenSpiel(tic_tac_toe)`
+        run(e)
+        @test e.hook[1].rewards[end] == e.hook[2].rewards[end] == 0.0
+    end
+
+    @testset "TabularCFR" begin
+        e = E`JuliaRL_TabularCFR_OpenSpiel(kuhn_poker)`
+        run(e)
+        @test isapprox(mean(e.hook[2].rewards), -1 / 18;atol=0.005)
+        @test isapprox(mean(e.hook[3].rewards), 1 / 18;atol=0.005)
+
+        reset!(e.env)
+        expected_values = Dict(expected_policy_values(e.agent, e.env))
+        @test isapprox(expected_values[get_role(e.agent[2])], -1/18; atol=0.005)
+        @test isapprox(expected_values[get_role(e.agent[3])], 1/18; atol=0.005)
+    end
 end

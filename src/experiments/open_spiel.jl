@@ -18,13 +18,13 @@ end
 
 function RLCore.Experiment(
     ::Val{:JuliaRL},
-    ::Val{:CFRPolicy},
+    ::Val{:TabularCFR},
     ::Val{:OpenSpiel},
     game;
     n_iter=300
 )
     env = OpenSpielEnv(game;default_state_style=RLBase.Information{String}(), is_chance_agent_required=true)
-    π = CFRPolicy(;n_iter=n_iter, env)
+    π = TabularCFRPolicy(;n_iter=n_iter, env)
 
     agents = map(get_players(env)) do p
         if p == get_chance_player(env)
@@ -36,7 +36,7 @@ function RLCore.Experiment(
 
     hooks = [p == get_chance_player(env) ? EmptyHook() : TotalRewardPerEpisode() for p in get_players(env)]
     description="""
-    # Play `$game` in OpenSpiel with CFRPolicy
+    # Play `$game` in OpenSpiel with TabularCFRPolicy
     """
     Experiment(agents, env, StopAfterEpisode(10_000), hooks, description)
 end
