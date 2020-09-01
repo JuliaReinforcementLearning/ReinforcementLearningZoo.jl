@@ -45,6 +45,9 @@ Some built-in experiments are exported to help new users to easily run benchmark
 - ``E`JuliaRL_SAC_Pendulum` `` (Thanks to [@rbange](https://github.com/rbange))
 - ``E`JuliaRL_BasicDQN_MountainCar` `` (Thanks to [@felixchalumeau](https://github.com/felixchalumeau))
 - ``E`JuliaRL_DQN_MountainCar` `` (Thanks to [@felixchalumeau](https://github.com/felixchalumeau))
+- ``E`JuliaRL_Minimax_OpenSpiel(tic_tac_toe)` ``
+- ``E`JuliaRL_TabularCFR_OpenSpiel(kuhn_poker)` ``
+- ``E`JuliaRL_DQN_SnakeGame` ``
 - ``E`Dopamine_DQN_Atari(pong)` ``
 - ``E`Dopamine_Rainbow_Atari(pong)` ``
 - ``E`Dopamine_IQN_Atari(pong)` ``
