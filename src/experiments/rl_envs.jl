@@ -272,6 +272,11 @@ function RLCore.Experiment(
                 end
             end
         end,
+        DoEveryNEpisode() do t, agent, env
+            with_logger(lg) do
+                @info "training" reward = total_reward_per_episode.rewards[end]
+            end
+        end,
         DoEveryNStep(10000) do t, agent, env
             RLCore.save(save_dir, agent)
             BSON.@save joinpath(save_dir, "stats.bson") total_reward_per_episode time_per_step
@@ -469,6 +474,11 @@ function RLCore.Experiment(
                 end
             end
         end,
+        DoEveryNEpisode() do t, agent, env
+            with_logger(lg) do
+                @info "training" reward = total_reward_per_episode.rewards[end]
+            end
+        end,
         DoEveryNStep(10000) do t, agent, env
             RLCore.save(save_dir, agent)
             BSON.@save joinpath(save_dir, "stats.bson") total_reward_per_episode time_per_step
@@ -547,17 +557,14 @@ function RLCore.Experiment(
         time_per_step,
         DoEveryNStep() do t, agent, env
             with_logger(lg) do
-                @info "training" actor_loss = agent.policy.learner.actor_loss
-                @info "training" critic_loss = agent.policy.learner.critic_loss
-                @info "training" entropy_loss = agent.policy.learner.entropy_loss
-                @info "training" loss = agent.policy.learner.loss
-                @info "training" reward = total_reward_per_episode.reward[end]
-            end
-        end,
-        DoEveryNEpisode() do t, agent, env
-            with_logger(lg) do
-                # TODO: this is not called
-                # @info "training" reward = total_reward_per_episode.reward[end]
+                @info(
+                    "training",
+                    actor_loss = agent.policy.learner.actor_loss,
+                    critic_loss = agent.policy.learner.critic_loss,
+                    entropy_loss = agent.policy.learner.entropy_loss,
+                    loss = agent.policy.learner.loss,
+                    reward = total_reward_per_episode.reward[end]
+                )
             end
         end,
         DoEveryNStep(10000) do t, agent, env
@@ -643,17 +650,14 @@ function RLCore.Experiment(
         time_per_step,
         DoEveryNStep() do t, agent, env
             with_logger(lg) do
-                @info "training" actor_loss = agent.policy.learner.actor_loss
-                @info "training" critic_loss = agent.policy.learner.critic_loss
-                @info "training" entropy_loss = agent.policy.learner.entropy_loss
-                @info "training" loss = agent.policy.learner.loss
-                @info "training" reward = total_reward_per_episode.reward[end]
-            end
-        end,
-        DoEveryNEpisode() do t, agent, env
-            with_logger(lg) do
-                # TODO: this is not called
-                # @info "training" reward = total_reward_per_episode.reward[end]
+                @info(
+                    "training",
+                    actor_loss = agent.policy.learner.actor_loss,
+                    critic_loss = agent.policy.learner.critic_loss,
+                    entropy_loss = agent.policy.learner.entropy_loss,
+                    loss = agent.policy.learner.loss,
+                    reward = total_reward_per_episode.reward[end],
+                )
             end
         end,
         DoEveryNStep(10000) do t, agent, env
@@ -751,8 +755,11 @@ function RLCore.Experiment(
         time_per_step,
         DoEveryNStep() do t, agent, env
             with_logger(lg) do
-                @info "training" actor_loss = agent.policy.actor_loss
-                @info "training" critic_loss = agent.policy.critic_loss
+                @info(
+                    "training",
+                    actor_loss = agent.policy.actor_loss,
+                    critic_loss = agent.policy.critic_loss
+                )
             end
         end,
         DoEveryNEpisode() do t, agent, env
@@ -851,17 +858,13 @@ function RLCore.Experiment(
         time_per_step,
         DoEveryNStep() do t, agent, env
             with_logger(lg) do
-                @info "training" actor_loss = agent.policy.learner.actor_loss[end, end]
-                @info "training" critic_loss =
-                    agent.policy.learner.critic_loss[end, end]
-                @info "training" loss = agent.policy.learner.loss[end, end]
-                @info "training" reward = total_reward_per_episode.reward[end]
-            end
-        end,
-        DoEveryNEpisode() do t, agent, env
-            with_logger(lg) do
-                # TODO: this is not called
-                # @info "training" reward = total_reward_per_episode.reward
+                @info(
+                    "training",
+                    actor_loss = agent.policy.learner.actor_loss[end, end],
+                    critic_loss = agent.policy.learner.critic_loss[end, end],
+                    loss = agent.policy.learner.loss[end, end],
+                    reward = total_reward_per_episode.reward[end]
+                )
             end
         end,
         DoEveryNStep(10000) do t, agent, env
@@ -927,7 +930,7 @@ function RLCore.Experiment(
         ),
     )
 
-    stop_condition = StopAfterStep(10_000)
+    stop_condition = StopAfterStep(70_000)
 
     total_reward_per_episode = TotalRewardPerEpisode()
     time_per_step = TimePerStep()
@@ -1124,7 +1127,7 @@ function RLCore.Experiment(
         ),
     )
 
-    stop_condition = StopAfterStep(10000)
+    stop_condition = StopAfterStep(10_000)
     total_reward_per_episode = TotalRewardPerEpisode()
     time_per_step = TimePerStep()
     hook = ComposedHook(
