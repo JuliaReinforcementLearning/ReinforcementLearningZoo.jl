@@ -1,3 +1,5 @@
+using Random
+
 function RLCore.Experiment(
     ::Val{:JuliaRL},
     ::Val{:Minimax},
@@ -21,10 +23,12 @@ function RLCore.Experiment(
     ::Val{:TabularCFR},
     ::Val{:OpenSpiel},
     game;
-    n_iter=300
+    n_iter=300,
+    seed=123
 )
     env = OpenSpielEnv(game;default_state_style=RLBase.Information{String}(), is_chance_agent_required=true)
-    π = TabularCFRPolicy(;n_iter=n_iter, env)
+    rng = MersenneTwister(seed)
+    π = TabularCFRPolicy(;n_iter=n_iter, env=env, rng=rng)
 
     agents = map(get_players(env)) do p
         if p == get_chance_player(env)
