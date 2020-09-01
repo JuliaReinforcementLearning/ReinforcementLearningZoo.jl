@@ -24,6 +24,8 @@ This project aims to provide some implementations of the most typical reinforcem
 - PPO
 - DDPG
 - SAC
+- CFR
+- Minimax
 
 If you are looking for tabular reinforcement learning algorithms, you may refer [ReinforcementLearningAnIntroduction.jl](https://github.com/JuliaReinforcementLearning/ReinforcementLearningAnIntroduction.jl).
 
@@ -59,7 +61,7 @@ Some built-in experiments are exported to help new users to easily run benchmark
 - Experiments on `CartPole` usually run faster with CPU only due to the overhead of sending data between CPU and GPU.
 - It shouldn't surprise you that our experiments on `CartPole` are much faster than those written in Python. The secret is that our environment is written in Julia!
 - Remember to set `JULIA_NUM_THREADS` to enable multi-threading when using algorithms like `A2C` and `PPO`.
-- Experiments on `Atari` are only available when you have `ArcadeLearningEnvironment.jl` installed and `using ArcadeLearningEnvironment`.
+- Experiments on `Atari` (`OpenSpiel`, `SnakeGame`) are only available after you have `ArcadeLearningEnvironment.jl` (`OpenSpiel.jl`, `SnakeGame.jl`) installed and `using ArcadeLearningEnvironment` (`using OpenSpiel`, `using SnakeGame`).
 
 ### Speed
 
