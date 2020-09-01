@@ -38,5 +38,5 @@ function RLCore.Experiment(
     description="""
     # Play `$game` in OpenSpiel with TabularCFRPolicy
     """
-    Experiment(agents, env, StopAfterEpisode(10_000), hooks, description)
+    Experiment(agents, env, StopAfterEpisode(100_000), hooks, description)
 end

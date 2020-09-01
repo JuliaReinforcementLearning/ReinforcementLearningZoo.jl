@@ -6,6 +6,7 @@ using ReinforcementLearningEnvironments
 using Flux
 using Statistics
 using Random
+using OpenSpiel
 
 @testset "ReinforcementLearningZoo.jl" begin
 
