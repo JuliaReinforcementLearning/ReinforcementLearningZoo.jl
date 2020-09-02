@@ -20,8 +20,11 @@ using OpenSpiel
                     nothing;
                     save_dir = joinpath(dir, "CartPole", string(method)),
                 ))
+                idx = size(res.hook[1].rewards, 1) * 3 ÷ 4 # 3/4 or larger number? but what if the size of the array is too small?
+                recent_reward = mean(res.hook[1].rewards[idx:end])
                 @info "stats for $method" avg_reward = mean(res.hook[1].rewards) avg_fps =
-                    1 / mean(res.hook[2].times)
+                    1 / mean(res.hook[2].times) recent_reward
+                @test 190 < recent_reward # a magic number. what's the appropriate goal for each env? can we get it from the env directly?
             end
 
             for method in (:BasicDQN, :DQN)
