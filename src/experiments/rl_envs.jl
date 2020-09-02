@@ -87,7 +87,8 @@ function RLCore.Experiment(
         end,
         DoEveryNEpisode() do t, agent, env
             with_logger(lg) do
-                @info "training" reward = total_reward_per_episode.rewards[end]
+                @info "training" reward = total_reward_per_episode.rewards[end] log_step_increment =
+                    0
             end
         end,
         DoEveryNStep(10000) do t, agent, env
@@ -180,7 +181,8 @@ function RLCore.Experiment(
         end,
         DoEveryNEpisode() do t, agent, env
             with_logger(lg) do
-                @info "training" reward = total_reward_per_episode.rewards[end]
+                @info "training" reward = total_reward_per_episode.rewards[end] log_step_increment =
+                    0
             end
         end,
         DoEveryNStep(10000) do t, agent, env
@@ -274,7 +276,8 @@ function RLCore.Experiment(
         end,
         DoEveryNEpisode() do t, agent, env
             with_logger(lg) do
-                @info "training" reward = total_reward_per_episode.rewards[end]
+                @info "training" reward = total_reward_per_episode.rewards[end] log_step_increment =
+                    0
             end
         end,
         DoEveryNStep(10000) do t, agent, env
@@ -374,7 +377,8 @@ function RLCore.Experiment(
         end,
         DoEveryNEpisode() do t, agent, env
             with_logger(lg) do
-                @info "training" reward = total_reward_per_episode.rewards[end]
+                @info "training" reward = total_reward_per_episode.rewards[end] log_step_increment =
+                    0
             end
         end,
         DoEveryNStep(10000) do t, agent, env
@@ -476,7 +480,8 @@ function RLCore.Experiment(
         end,
         DoEveryNEpisode() do t, agent, env
             with_logger(lg) do
-                @info "training" reward = total_reward_per_episode.rewards[end]
+                @info "training" reward = total_reward_per_episode.rewards[end] log_step_increment =
+                    0
             end
         end,
         DoEveryNStep(10000) do t, agent, env
@@ -776,7 +781,8 @@ function RLCore.Experiment(
         end,
         DoEveryNEpisode() do t, agent, env
             with_logger(lg) do
-                @info "training" reward = total_reward_per_episode.rewards[end]
+                @info "training" reward = total_reward_per_episode.rewards[end] log_step_increment =
+                    0
             end
         end,
         DoEveryNStep(10000) do t, agent, env
@@ -962,7 +968,8 @@ function RLCore.Experiment(
         end,
         DoEveryNEpisode() do t, agent, env
             with_logger(lg) do
-                @info "training" reward = total_reward_per_episode.rewards[end]
+                @info "training" reward = total_reward_per_episode.rewards[end] log_step_increment =
+                    0
             end
         end,
         DoEveryNStep(10000) do t, agent, env
@@ -1056,7 +1063,8 @@ function RLCore.Experiment(
         end,
         DoEveryNEpisode() do t, agent, env
             with_logger(lg) do
-                @info "training" reward = total_reward_per_episode.rewards[end]
+                @info "training" reward = total_reward_per_episode.rewards[end] log_step_increment =
+                    0
             end
         end,
         DoEveryNStep(10000) do t, agent, env
