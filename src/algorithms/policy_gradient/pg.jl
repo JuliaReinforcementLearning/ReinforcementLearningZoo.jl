@@ -44,9 +44,7 @@ function RLBase.update!(π::PGPolicy, traj::ElasticCompactSARTSATrajectory)
     actions = traj[:action] |> Array
     rewards = traj[:reward] |> Array
 
-    gains = discount_rewards(rewards, π.γ)
-    gains = (gains .- mean(gains)) ./ (std(gains) .+ 1f-6)
-    gains = gains |> to_dev
+    gains = discount_rewards(rewards, π.γ) |> x -> Flux.normalise(x; dims = 1) |> to_dev
 
     gs = gradient(Flux.params(Q)) do
         logits = states |> Q |> Array
