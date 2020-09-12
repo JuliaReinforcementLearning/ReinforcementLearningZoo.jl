@@ -1219,7 +1219,7 @@ function RLCore.Experiment(
         ),
     )
 
-    stop_condition = StopAfterStep(200_000)
+    stop_condition = StopAfterStep(30_000)
 
     total_reward_per_episode = TotalRewardPerEpisode()
     time_per_step = TimePerStep()
@@ -1236,7 +1236,7 @@ function RLCore.Experiment(
                 )
             end
         end,
-        DoEveryNStep(10000) do t, agent, env
+        DoEveryNStep(10_000) do t, agent, env
             RLCore.save(save_dir, agent)
             BSON.@save joinpath(save_dir, "stats.bson") total_reward_per_episode time_per_step
         end,

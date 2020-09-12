@@ -15,17 +15,19 @@ Base.@kwdef mutable struct PGPolicy{A<:NeuralNetworkApproximator,R<:AbstractRNG}
     loss::Float32 = 0f0
 end
 
+# if the action space is discrete, then softmax should be the last layer of the model.
+
 function (π::PGPolicy)(env)
     to_dev = x -> send_to_device(device(π.approximator), x)
 
     logits = env |> get_state |> to_dev |> π.approximator |> send_to_host # if the action space is discrete, then the approximator should softmax the output values.
-    actions = get_actions(env)
+    dist = logits |> π.dist_fn
 
+    actions = get_actions(env)
     if typeof(actions) <: DiscreteSpace
-        dist = logits |> softmax |> π.dist_fn
         action = actions[rand(dist)]
     elseif typeof(actions) <: ContinuousSpace
-        dist = logits |> π.dist_fn
+        error("Not implemented")
         action = clamp(rand(dist), actions.low, actions.high)
     else
         error("Not implemented")
@@ -44,11 +46,11 @@ function RLBase.update!(π::PGPolicy, traj::ElasticCompactSARTSATrajectory)
     actions = traj[:action] |> Array
     rewards = traj[:reward] |> Array
 
-    gains = discount_rewards(rewards, π.γ) |> x -> Flux.normalise(x; dims = 1) |> to_dev
+    gains = discount_rewards(rewards, π.γ) |> to_dev |> x -> Flux.normalise(x; dims = 1)
 
     gs = gradient(Flux.params(Q)) do
         logits = states |> Q |> Array
-        log_prob = logits[CartesianIndex.(actions, 1:length(actions))] |> logsoftmax
+        log_prob = logits[CartesianIndex.(actions, 1:length(actions))] .|> log
         entropy_loss = -mean(log_prob .* gains)
         ignore() do
             π.loss = entropy_loss
