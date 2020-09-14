@@ -75,7 +75,7 @@ function RLBase.update!(π::PGPolicy, traj::ElasticCompactSARTSATrajectory)
     error("not supported")
 end
 
-function update!(π::PGPolicy, traj::ElasticCompactSARTSATrajectory, ::DiscreteSpace)
+function RLBase.update!(π::PGPolicy, traj::ElasticCompactSARTSATrajectory, ::DiscreteSpace)
     (length(traj[:terminal]) > 0 && traj[:terminal][end]) || return
 
     model = π.approximator
@@ -97,11 +97,11 @@ function update!(π::PGPolicy, traj::ElasticCompactSARTSATrajectory, ::DiscreteS
         end
         loss
     end
-    RLBase.update!(model, gs)
+    update!(model, gs)
     empty!(traj)
 end
 
-function update!(π::PGPolicy, traj::ElasticCompactSARTSATrajectory, ::ContinuousSpace)
+function RLBase.update!(π::PGPolicy, traj::ElasticCompactSARTSATrajectory, ::ContinuousSpace)
     (length(traj[:terminal]) > 0 && traj[:terminal][end]) || return
 
     model = π.approximator
@@ -126,6 +126,6 @@ function update!(π::PGPolicy, traj::ElasticCompactSARTSATrajectory, ::Continuou
         loss
     end
 
-    RLBase.update!(model, gs)
+    update!(model, gs)
     empty!(traj)
 end
