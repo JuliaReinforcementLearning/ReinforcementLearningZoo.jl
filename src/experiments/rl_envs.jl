@@ -9,7 +9,7 @@ using BSON
 using TensorBoardLogger
 using Logging
 using Random
-using Distributions: Categorical
+using Distributions: Categorical, Normal
 
 function Description(prelude::String, save_dir::String)
     """
@@ -1205,11 +1205,9 @@ function RLCore.Experiment(
                     Dense(ns, 128, relu; initW = glorot_uniform(rng)),
                     Dense(128, 128, relu; initW = glorot_uniform(rng)),
                     Dense(128, na; initW = glorot_uniform(rng)),
-                    softmax,
                 ),
                 optimizer = ADAM(),
-            ),
-            dist_fn = Categorical,
+            ) |> cpu,
             γ = 0.99f0,
             rng = rng,
         ),
@@ -1236,13 +1234,80 @@ function RLCore.Experiment(
                 )
             end
         end,
-        DoEveryNStep(10_000) do t, agent, env
+        DoEveryNStep(30_000) do t, agent, env
             RLCore.save(save_dir, agent)
             BSON.@save joinpath(save_dir, "stats.bson") total_reward_per_episode time_per_step
         end,
     )
 
     description = Description("# Play CartPole with PG", save_dir)
+
+    Experiment(agent, env, stop_condition, hook, description)
+end
+
+function RLCore.Experiment(
+    ::Val{:JuliaRL},
+    ::Val{:PG},
+    ::Val{:Pendulum},
+    ::Nothing;
+    save_dir = nothing,
+    seed = 123,
+)
+    if isnothing(save_dir)
+        t = Dates.format(now(), "yyyy_mm_dd_HH_MM_SS")
+        save_dir = joinpath(pwd(), "checkpoints", "JuliaRL_PG_Pendulum_$(t)")
+    end
+
+    lg = TBLogger(joinpath(save_dir, "tb_log"), min_level = Logging.Info)
+    rng = MersenneTwister(seed)
+    env = PendulumEnv(; T = Float32, rng = rng)
+    ns = length(get_state(env))
+
+    agent = Agent(
+        policy = PGPolicy(
+            approximator = NeuralNetworkApproximator(
+                model = Chain(
+                    Dense(ns, 128, relu; initW = glorot_uniform(rng)),
+                    Dense(128, 128, relu; initW = glorot_uniform(rng)),
+                    Dense(128, 2, tanh; initW = glorot_uniform(rng)),
+                ),
+                optimizer = ADAM(),
+            ) |> cpu,
+            dist = Normal,
+            γ = 0.99f0,
+            rng = rng,
+        ),
+        trajectory = ElasticCompactSARTSATrajectory(
+            state_type = Float32,
+            state_size = (ns,),
+            action_type = Float32,
+        ),
+    )
+
+    stop_condition = StopAfterStep(20_000)
+
+    total_reward_per_episode = TotalRewardPerEpisode()
+    time_per_step = TimePerStep()
+    hook = ComposedHook(
+        total_reward_per_episode,
+        time_per_step,
+        # PG is updated at the end of an episode, so don't log per step loss
+        DoEveryNEpisode() do t, agent, env
+            with_logger(lg) do
+                @info(
+                    "training",
+                    loss = agent.policy.loss,
+                    reward = total_reward_per_episode.rewards[end]
+                )
+            end
+        end,
+        DoEveryNStep(10_000) do t, agent, env
+            RLCore.save(save_dir, agent)
+            BSON.@save joinpath(save_dir, "stats.bson") total_reward_per_episode time_per_step
+        end,
+    )
+
+    description = Description("# Play Pendulum with PG", save_dir)
 
     Experiment(agent, env, stop_condition, hook, description)
 end
