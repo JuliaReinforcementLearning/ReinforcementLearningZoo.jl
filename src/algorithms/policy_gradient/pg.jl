@@ -11,6 +11,8 @@ Base.@kwdef mutable struct PGPolicy{A<:NeuralNetworkApproximator,R<:AbstractRNG}
     approximator::A
     dist::Any = Categorical
     γ::Float32 = 0.99f0 # discount factor
+    α = 1.0f0 # step size
+    fα = 0.995f0
     mini_batches::Int = 128
     rng::R = Random.GLOBAL_RNG
     loss::Float32 = 0.0f0
@@ -49,7 +51,7 @@ function (π::PGPolicy)(env::MultiThreadEnv)
 end
 
 function (π::PGPolicy)(logits, actions::DiscreteSpace)
-    dist = logits |> softmax |> send_to_host |> π.dist
+    dist = logits |> softmax |> π.dist
     action = actions[rand(π.rng, dist)]
 end
 
@@ -91,7 +93,7 @@ function RLBase.update!(π::PGPolicy, traj::ElasticCompactSARTSATrajectory, ::Di
     gs = gradient(Flux.params(model)) do
         log_prob = states |> model |> logsoftmax
         log_probₐ = log_prob[CartesianIndex.(actions, 1:length(actions))]
-        loss = -mean(log_probₐ .* gains)
+        loss = -mean(log_probₐ .* gains) * π.α
         ignore() do
             π.loss = loss
         end
@@ -99,9 +101,14 @@ function RLBase.update!(π::PGPolicy, traj::ElasticCompactSARTSATrajectory, ::Di
     end
     update!(model, gs)
     empty!(traj)
+    π.α *= π.fα # decrease α
 end
 
-function RLBase.update!(π::PGPolicy, traj::ElasticCompactSARTSATrajectory, ::ContinuousSpace)
+function RLBase.update!(
+    π::PGPolicy,
+    traj::ElasticCompactSARTSATrajectory,
+    ::ContinuousSpace,
+)
     (length(traj[:terminal]) > 0 && traj[:terminal][end]) || return
 
     model = π.approximator
