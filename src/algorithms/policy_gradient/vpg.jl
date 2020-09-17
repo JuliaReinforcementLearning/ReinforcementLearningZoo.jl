@@ -5,8 +5,12 @@ using Random
 using ReinforcementLearningBase
 using ReinforcementLearningCore
 
-export PGPolicy
-Base.@kwdef mutable struct PGPolicy{A<:NeuralNetworkApproximator,R<:AbstractRNG} <:
+export VPGPolicy
+
+"""
+Vanilla Policy Gradient
+"""
+Base.@kwdef mutable struct VPGPolicy{A<:NeuralNetworkApproximator,R<:AbstractRNG} <:
                            AbstractPolicy
     approximator::A
     dist::Any = Categorical
@@ -18,7 +22,7 @@ Base.@kwdef mutable struct PGPolicy{A<:NeuralNetworkApproximator,R<:AbstractRNG}
     loss::Float32 = 0.0f0
 end
 
-function (agent::Agent{<:PGPolicy,<:AbstractTrajectory})(::Training{PreActStage}, env)
+function (agent::Agent{<:VPGPolicy,<:AbstractTrajectory})(::Training{PreActStage}, env)
     action = agent.policy(env)
     push!(agent.trajectory; state = get_state(env), action = action)
     if ActionStyle(env) === FULL_ACTION_SET
@@ -28,7 +32,7 @@ function (agent::Agent{<:PGPolicy,<:AbstractTrajectory})(::Training{PreActStage}
     action
 end
 
-function (agent::Agent{<:PGPolicy,<:AbstractTrajectory})(::Training{PostEpisodeStage}, env)
+function (agent::Agent{<:VPGPolicy,<:AbstractTrajectory})(::Training{PostEpisodeStage}, env)
     action = agent.policy(env)
     push!(agent.trajectory; state = get_state(env), action = action)
     if ActionStyle(env) === FULL_ACTION_SET
@@ -38,19 +42,19 @@ function (agent::Agent{<:PGPolicy,<:AbstractTrajectory})(::Training{PostEpisodeS
     action
 end
 
-function (π::PGPolicy)(env)
+function (π::VPGPolicy)(env)
     to_dev = x -> send_to_device(device(π.approximator), x)
 
     logits = env |> get_state |> to_dev |> π.approximator
     π(logits, get_actions(env))
 end
 
-function (π::PGPolicy)(env::MultiThreadEnv)
+function (π::VPGPolicy)(env::MultiThreadEnv)
     error("not implemented")
     # TODO: can PG support multi env? PG only get updated at the end of an episode.
 end
 
-function (π::PGPolicy)(logits, actions::DiscreteSpace)
+function (π::VPGPolicy)(logits, actions::DiscreteSpace)
     dist = logits |> softmax |> π.dist
     action = actions[rand(π.rng, dist)]
 end
@@ -58,26 +62,26 @@ end
 """
 See Diagonal Gaussian Policies from https://spinningup.openai.com/en/latest/spinningup/rl_intro.html#stochastic-policies
 """
-function (π::PGPolicy)(logits, actions::ContinuousSpace)
+function (π::VPGPolicy)(logits, actions::ContinuousSpace)
     dist = logits |> send_to_host |> x -> π.dist(x[1], exp(x[2]))
     action = clamp(rand(π.rng, dist), actions.low, actions.high)
 end
 
-function (π::PGPolicy)(logits, actions::MultiDiscreteSpace)
+function (π::VPGPolicy)(logits, actions::MultiDiscreteSpace)
     error("not implemented")
     # TODO
 end
 
-function (π::PGPolicy)(logits, actions::MultiContinuousSpace)
+function (π::VPGPolicy)(logits, actions::MultiContinuousSpace)
     error("not implemented")
     # TODO
 end
 
-function RLBase.update!(π::PGPolicy, traj::ElasticCompactSARTSATrajectory)
+function RLBase.update!(π::VPGPolicy, traj::ElasticCompactSARTSATrajectory)
     error("not supported")
 end
 
-function RLBase.update!(π::PGPolicy, traj::ElasticCompactSARTSATrajectory, ::DiscreteSpace)
+function RLBase.update!(π::VPGPolicy, traj::ElasticCompactSARTSATrajectory, ::DiscreteSpace)
     (length(traj[:terminal]) > 0 && traj[:terminal][end]) || return
 
     model = π.approximator
@@ -105,7 +109,7 @@ function RLBase.update!(π::PGPolicy, traj::ElasticCompactSARTSATrajectory, ::Di
 end
 
 function RLBase.update!(
-    π::PGPolicy,
+    π::VPGPolicy,
     traj::ElasticCompactSARTSATrajectory,
     ::ContinuousSpace,
 )

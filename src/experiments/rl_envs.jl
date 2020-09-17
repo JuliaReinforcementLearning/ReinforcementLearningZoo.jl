@@ -1182,7 +1182,7 @@ end
 
 function RLCore.Experiment(
     ::Val{:JuliaRL},
-    ::Val{:PG},
+    ::Val{:VPG},
     ::Val{:CartPole},
     ::Nothing;
     save_dir = nothing,
@@ -1190,7 +1190,7 @@ function RLCore.Experiment(
 )
     if isnothing(save_dir)
         t = Dates.format(now(), "yyyy_mm_dd_HH_MM_SS")
-        save_dir = joinpath(pwd(), "checkpoints", "JuliaRL_PG_CartPole_$(t)")
+        save_dir = joinpath(pwd(), "checkpoints", "JuliaRL_VPG_CartPole_$(t)")
     end
 
     lg = TBLogger(joinpath(save_dir, "tb_log"), min_level = Logging.Info)
@@ -1199,7 +1199,7 @@ function RLCore.Experiment(
     ns, na = length(get_state(env)), length(get_actions(env))
 
     agent = Agent(
-        policy = PGPolicy(
+        policy = VPGPolicy(
             approximator = NeuralNetworkApproximator(
                 model = Chain(
                     Dense(ns, 128, relu; initW = glorot_uniform(rng)),
@@ -1216,7 +1216,7 @@ function RLCore.Experiment(
             state_size = (ns,),
         ),
     )
-    # PG is updated after each episode
+    # VPG is updated after each episode
     stop_condition = StopAfterEpisode(500)
 
     total_reward_per_episode = TotalRewardPerEpisode()
@@ -1239,14 +1239,14 @@ function RLCore.Experiment(
         end,
     )
 
-    description = Description("# Play CartPole with PG", save_dir)
+    description = Description("# Play CartPole with VPG", save_dir)
 
     Experiment(agent, env, stop_condition, hook, description)
 end
 
 function RLCore.Experiment(
     ::Val{:JuliaRL},
-    ::Val{:PG},
+    ::Val{:VPG},
     ::Val{:Pendulum},
     ::Nothing;
     save_dir = nothing,
@@ -1254,7 +1254,7 @@ function RLCore.Experiment(
 )
     if isnothing(save_dir)
         t = Dates.format(now(), "yyyy_mm_dd_HH_MM_SS")
-        save_dir = joinpath(pwd(), "checkpoints", "JuliaRL_PG_Pendulum_$(t)")
+        save_dir = joinpath(pwd(), "checkpoints", "JuliaRL_VPG_Pendulum_$(t)")
     end
 
     lg = TBLogger(joinpath(save_dir, "tb_log"), min_level = Logging.Info)
@@ -1263,7 +1263,7 @@ function RLCore.Experiment(
     ns = length(get_state(env))
 
     agent = Agent(
-        policy = PGPolicy(
+        policy = VPGPolicy(
             approximator = NeuralNetworkApproximator(
                 model = Chain(
                     Dense(ns, 128, relu; initW = glorot_uniform(rng)),
@@ -1311,7 +1311,7 @@ function RLCore.Experiment(
         end,
     )
 
-    description = Description("# Play Pendulum with PG", save_dir)
+    description = Description("# Play Pendulum with VPG", save_dir)
 
     Experiment(agent, env, stop_condition, hook, description)
 end
