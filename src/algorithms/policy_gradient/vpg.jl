@@ -63,7 +63,7 @@ end
 See Diagonal Gaussian Policies from https://spinningup.openai.com/en/latest/spinningup/rl_intro.html#stochastic-policies
 """
 function (π::VPGPolicy)(logits, actions::ContinuousSpace)
-    dist = logits |> send_to_host |> x -> π.dist(x[1], exp(x[2]))
+    dist = π.dist(logits[1], exp(logits[2]))
     action = clamp(rand(π.rng, dist), actions.low, actions.high)
 end
 
@@ -103,6 +103,7 @@ function RLBase.update!(π::VPGPolicy, traj::ElasticCompactSARTSATrajectory, ::D
         end
         loss
     end
+
     update!(model, gs)
     empty!(traj)
     π.α *= π.fα # decrease α
@@ -122,7 +123,7 @@ function RLBase.update!(
     actions = traj[:action]
     gains =
         traj[:reward] |>
-        x -> discount_rewards(x, π.γ) |> to_dev |> x -> Flux.normalise(x; dims = 1)
+        x -> discount_rewards(x, π.γ) |> x -> Flux.normalise(x; dims = 1) |> to_dev
 
     # TODO: fix bug
     gs = gradient(Flux.params(model)) do
@@ -130,7 +131,7 @@ function RLBase.update!(
         @views μ, σ = logits[1, :], exp.(logits[2, :])
         dist = π.dist.(μ, σ)
         log_probₐ = logpdf.(dist, actions)
-        loss = -mean(log_probₐ .* gains)
+        loss = -mean(log_probₐ .* gains) * π.α
         ignore() do
             π.loss = loss
         end
@@ -139,4 +140,6 @@ function RLBase.update!(
 
     update!(model, gs)
     empty!(traj)
+    π.α *= π.fα # decrease α
+
 end

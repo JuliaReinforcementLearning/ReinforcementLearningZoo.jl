@@ -1283,31 +1283,21 @@ function RLCore.Experiment(
         ),
     )
 
-    stop_condition = StopAfterStep(50_000)
+    stop_condition = StopAfterEpisode(500)
 
     total_reward_per_episode = TotalRewardPerEpisode()
     time_per_step = TimePerStep()
     hook = ComposedHook(
         total_reward_per_episode,
         time_per_step,
-        DoEveryNStep() do t, agent, env
-            with_logger(lg) do
-                @info "training" # in order to increase the step count in tb logger
-            end
-        end,
         DoEveryNEpisode() do t, agent, env
             with_logger(lg) do
                 @info(
                     "training",
                     loss = agent.policy.loss,
                     reward = total_reward_per_episode.rewards[end],
-                    log_step_increment = 0
                 )
             end
-        end,
-        DoEveryNStep(50_000) do t, agent, env
-            RLCore.save(save_dir, agent)
-            BSON.@save joinpath(save_dir, "stats.bson") total_reward_per_episode time_per_step
         end,
     )
 
