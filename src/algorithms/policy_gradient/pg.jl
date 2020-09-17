@@ -87,7 +87,7 @@ function RLBase.update!(π::PGPolicy, traj::ElasticCompactSARTSATrajectory, ::Di
     actions = traj[:action]
     gains =
         traj[:reward] |>
-        x -> discount_rewards(x, π.γ) |> to_dev |> x -> Flux.normalise(x; dims = 1)
+        x -> discount_rewards(x, π.γ) |> x -> Flux.normalise(x; dims = 1) |> to_dev
 
     # TODO: use mini batches.
     gs = gradient(Flux.params(model)) do
