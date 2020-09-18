@@ -1208,7 +1208,7 @@ function RLCore.Experiment(
                 ),
                 optimizer = ADAM(),
             ) |> cpu,
-            # TODO: the use of a baseline does not imporve the performance. why?
+            # TODO: Why the use of a baseline decrease the performance?
             # baseline = NeuralNetworkApproximator(
             #     model = Chain(
             #         Dense(ns, 128, relu; initW = glorot_uniform(rng)),

@@ -1,5 +1,5 @@
 using Distributions: Categorical, Normal
-using Flux
+using Flux: stack, unstack, chunk, normalise
 using Random
 
 using ReinforcementLearningBase
@@ -21,7 +21,7 @@ Base.@kwdef mutable struct VPGPolicy{
     γ::Float32 = 0.99f0 # discount factor
     α = 1.0f0 # step size
     fα = 0.999f0
-    mini_batches::Int = 128
+    batch_size::Int = 128
     rng::R = Random.GLOBAL_RNG
     loss::Float32 = 0.0f0
     baseline_loss::Float32 = 0.0f0
@@ -48,7 +48,7 @@ function (agent::Agent{<:VPGPolicy,<:AbstractTrajectory})(::Training{PostEpisode
 end
 
 function (π::VPGPolicy)(env)
-    to_dev = x -> send_to_device(device(π.approximator), x)
+    to_dev(x) = send_to_device(device(π.approximator), x)
 
     logits = env |> get_state |> to_dev |> π.approximator
     π(logits, get_actions(env))
@@ -92,27 +92,34 @@ function RLBase.update!(π::VPGPolicy, traj::ElasticCompactSARTSATrajectory, ::D
     (length(traj[:terminal]) > 0 && traj[:terminal][end]) || return
 
     model = π.approximator
-    to_dev = x -> send_to_device(device(model), x)
+    to_dev(x) = send_to_device(device(model), x)
 
-    states = traj[:state] |> to_dev
-    actions = traj[:action]
-    gains = traj[:reward] # |> x -> discount_rewards(x, π.γ)
+    n_chunks = ceil(Int, length(traj[:terminal]) / π.batch_size)
+    to_chunks(x) = chunk(x, n_chunks)
 
-    if typeof(π.baseline) != Nothing
-        baseline = π.baseline(states)
+    states = traj[:state] #|> x -> stack.(to_chunks(unstack(x, 2)), 2)
+    actions = traj[:action] #|> to_chunks
+    gains = traj[:reward] #|> to_chunks
+
+    if typeof(π.baseline) <: NeuralNetworkApproximator
         gs = gradient(Flux.params(π.baseline)) do
-            loss = mse(baseline, gains')
+            loss = mse(π.baseline(states), gains')
             ignore() do
                 π.baseline_loss = loss
             end
             loss
         end
+        gains -= π.baseline(states)[1, :]
         update!(π.baseline, gs)
-        gains -= baseline[1, :]
     end
-    gains =
-        gains |> x -> discount_rewards(x, π.γ) |> x -> Flux.normalise(x; dims = 1) |> to_dev
 
+    # merge gains before discount.
+
+    gains = gains |> x -> discount_rewards(x, π.γ)
+    if typeof(π.baseline) <: Nothing
+        # it seems normalise should not be used with a baseline
+        gains = gains |> x -> normalise(x; dims = 1)
+    end
     # TODO: use mini batches.
     gs = gradient(Flux.params(model)) do
         log_prob = states |> model |> logsoftmax
@@ -137,13 +144,13 @@ function RLBase.update!(
     (length(traj[:terminal]) > 0 && traj[:terminal][end]) || return
 
     model = π.approximator
-    to_dev = x -> send_to_device(device(model), x)
+    to_dev(x) = send_to_device(device(model), x)
 
     states = traj[:state] |> to_dev
     actions = traj[:action]
     gains =
         traj[:reward] |>
-        x -> discount_rewards(x, π.γ) |> x -> Flux.normalise(x; dims = 1) |> to_dev
+        x -> discount_rewards(x, π.γ) |> x -> normalise(x; dims = 1) |> to_dev
 
     # TODO: fix bug
     gs = gradient(Flux.params(model)) do
