@@ -1208,6 +1208,15 @@ function RLCore.Experiment(
                 ),
                 optimizer = ADAM(),
             ) |> cpu,
+            # TODO: the use of a baseline does not imporve the performance. why?
+            # baseline = NeuralNetworkApproximator(
+            #     model = Chain(
+            #         Dense(ns, 128, relu; initW = glorot_uniform(rng)),
+            #         Dense(128, 128, relu; initW = glorot_uniform(rng)),
+            #         Dense(128, 1; initW = glorot_uniform(rng)),
+            #     ),
+            #     optimizer = ADAM(),
+            # ) |> cpu,
             γ = 0.99f0,
             rng = rng,
         ),
@@ -1229,6 +1238,7 @@ function RLCore.Experiment(
                 @info(
                     "training",
                     loss = agent.policy.loss,
+                    baseline_loss = agent.policy.baseline_loss,
                     reward = total_reward_per_episode.rewards[end],
                 )
             end

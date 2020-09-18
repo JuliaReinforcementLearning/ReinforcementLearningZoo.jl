@@ -10,16 +10,21 @@ export VPGPolicy
 """
 Vanilla Policy Gradient
 """
-Base.@kwdef mutable struct VPGPolicy{A<:NeuralNetworkApproximator,R<:AbstractRNG} <:
-                           AbstractPolicy
+Base.@kwdef mutable struct VPGPolicy{
+    A<:NeuralNetworkApproximator,
+    B<:Union{NeuralNetworkApproximator,Nothing},
+    R<:AbstractRNG,
+} <: AbstractPolicy
     approximator::A
+    baseline::B = nothing
     dist::Any = Categorical
     γ::Float32 = 0.99f0 # discount factor
     α = 1.0f0 # step size
-    fα = 0.995f0
+    fα = 0.999f0
     mini_batches::Int = 128
     rng::R = Random.GLOBAL_RNG
     loss::Float32 = 0.0f0
+    baseline_loss::Float32 = 0.0f0
 end
 
 function (agent::Agent{<:VPGPolicy,<:AbstractTrajectory})(::Training{PreActStage}, env)
@@ -60,7 +65,9 @@ function (π::VPGPolicy)(logits, actions::DiscreteSpace)
 end
 
 """
-See Diagonal Gaussian Policies from https://spinningup.openai.com/en/latest/spinningup/rl_intro.html#stochastic-policies
+See
+* [Diagonal Gaussian Policies](https://spinningup.openai.com/en/latest/spinningup/rl_intro.html#stochastic-policies
+* [Clipped Action Policy Gradient](https://arxiv.org/pdf/1802.07564.pdf)
 """
 function (π::VPGPolicy)(logits, actions::ContinuousSpace)
     dist = π.dist(logits[1], exp(logits[2]))
@@ -89,9 +96,22 @@ function RLBase.update!(π::VPGPolicy, traj::ElasticCompactSARTSATrajectory, ::D
 
     states = traj[:state] |> to_dev
     actions = traj[:action]
+    gains = traj[:reward] # |> x -> discount_rewards(x, π.γ)
+
+    if typeof(π.baseline) != Nothing
+        baseline = π.baseline(states)
+        gs = gradient(Flux.params(π.baseline)) do
+            loss = mse(baseline, gains')
+            ignore() do
+                π.baseline_loss = loss
+            end
+            loss
+        end
+        update!(π.baseline, gs)
+        gains -= baseline[1, :]
+    end
     gains =
-        traj[:reward] |>
-        x -> discount_rewards(x, π.γ) |> x -> Flux.normalise(x; dims = 1) |> to_dev
+        gains |> x -> discount_rewards(x, π.γ) |> x -> Flux.normalise(x; dims = 1) |> to_dev
 
     # TODO: use mini batches.
     gs = gradient(Flux.params(model)) do
