@@ -19,8 +19,8 @@ Base.@kwdef mutable struct VPGPolicy{
     baseline::B = nothing
     dist::Any = Categorical
     γ::Float32 = 0.99f0 # discount factor
-    α = 1.0f0 # step size
-    fα = 0.999f0
+    α_θ = 1.0f0 # step size of policy
+    α_w = 1.0f0 # step size of baseline
     batch_size::Int = 128
     rng::R = Random.GLOBAL_RNG
     loss::Float32 = 0.0f0
@@ -97,12 +97,15 @@ function RLBase.update!(π::VPGPolicy, traj::ElasticCompactSARTSATrajectory, ::D
     n_chunks = ceil(Int, length(traj[:terminal]) / π.batch_size)
     to_chunks(x) = chunk(x, n_chunks)
 
+    # TODO: use mini batches.
+
     states = traj[:state] #|> x -> stack.(to_chunks(unstack(x, 2)), 2)
     actions = traj[:action] #|> to_chunks
-    gains = traj[:reward] #|> to_chunks
+    gains = traj[:reward] |> x -> discount_rewards(x, π.γ) #|> to_chunks
 
     if typeof(π.baseline) <: NeuralNetworkApproximator
         gs = gradient(Flux.params(π.baseline)) do
+            # TODO: is the loss function correct?
             loss = mse(π.baseline(states), gains')
             ignore() do
                 π.baseline_loss = loss
@@ -112,19 +115,15 @@ function RLBase.update!(π::VPGPolicy, traj::ElasticCompactSARTSATrajectory, ::D
         gains -= π.baseline(states)[1, :]
         update!(π.baseline, gs)
     end
-
-    # merge gains before discount.
-
-    gains = gains |> x -> discount_rewards(x, π.γ)
     if typeof(π.baseline) <: Nothing
-        # it seems normalise should not be used with a baseline
+        # it seems normalise should not be used with baseline
         gains = gains |> x -> normalise(x; dims = 1)
     end
-    # TODO: use mini batches.
+
     gs = gradient(Flux.params(model)) do
         log_prob = states |> model |> logsoftmax
         log_probₐ = log_prob[CartesianIndex.(actions, 1:length(actions))]
-        loss = -mean(log_probₐ .* gains) * π.α
+        loss = -mean(log_probₐ .* gains) * π.α_θ
         ignore() do
             π.loss = loss
         end
@@ -133,7 +132,6 @@ function RLBase.update!(π::VPGPolicy, traj::ElasticCompactSARTSATrajectory, ::D
 
     update!(model, gs)
     empty!(traj)
-    π.α *= π.fα # decrease α
 end
 
 function RLBase.update!(
@@ -167,6 +165,4 @@ function RLBase.update!(
 
     update!(model, gs)
     empty!(traj)
-    π.α *= π.fα # decrease α
-
 end
