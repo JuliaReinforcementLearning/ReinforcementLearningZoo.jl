@@ -99,9 +99,9 @@ function RLBase.update!(π::VPGPolicy, traj::ElasticCompactSARTSATrajectory, ::D
 
     # TODO: use mini batches.
 
-    states = traj[:state] #|> x -> stack.(to_chunks(unstack(x, 2)), 2)
+    states = traj[:state] |> to_dev #|> x -> stack.(to_chunks(unstack(x, 2)), 2)
     actions = traj[:action] #|> to_chunks
-    gains = traj[:reward] |> x -> discount_rewards(x, π.γ) #|> to_chunks
+    gains = traj[:reward] |> x -> discount_rewards(x, π.γ) |> to_dev #|> to_chunks
 
     if typeof(π.baseline) <: NeuralNetworkApproximator
         gs = gradient(Flux.params(π.baseline)) do
