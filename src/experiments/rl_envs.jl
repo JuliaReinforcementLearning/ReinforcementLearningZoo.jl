@@ -1261,6 +1261,7 @@ function RLCore.Experiment(
     save_dir = nothing,
     seed = 123,
 )
+# TODO: vpg does not work.
     if isnothing(save_dir)
         t = Dates.format(now(), "yyyy_mm_dd_HH_MM_SS")
         save_dir = joinpath(pwd(), "checkpoints", "JuliaRL_VPG_Pendulum_$(t)")
@@ -1268,16 +1269,32 @@ function RLCore.Experiment(
 
     lg = TBLogger(joinpath(save_dir, "tb_log"), min_level = Logging.Info)
     rng = MersenneTwister(seed)
-    env = PendulumEnv(; T = Float32, rng = rng)
+
+    inner_env = PendulumEnv(; T = Float32, rng = rng)
+    high, low = get_actions(inner_env) |> x -> (x.low, x.high)
+    env = inner_env |> ActionTransformedEnv(x -> low + (tanh(x) + 1) * 0.5 * (high - low))
     ns = length(get_state(env))
 
     agent = Agent(
         policy = VPGPolicy(
             approximator = NeuralNetworkApproximator(
+                model = GaussianNetwork(
+                    Chain(Dense(ns, 30, relu), Dense(30, 30, relu)),
+                    Chain(Dense(30, 1, initW = glorot_uniform(rng))),
+                    Chain(Dense(
+                        30,
+                        1,
+                        x -> min(max(x, typeof(x)(-20)), typeof(x)(2)),
+                        initW = glorot_uniform(rng),
+                    )),
+                ),
+                optimizer = ADAM(0.003),
+            ) |> cpu,
+            baseline = NeuralNetworkApproximator(
                 model = Chain(
                     Dense(ns, 128, relu; initW = glorot_uniform(rng)),
                     Dense(128, 128, relu; initW = glorot_uniform(rng)),
-                    Dense(128, 2, tanh; initW = glorot_uniform(rng)),
+                    Dense(128, 1; initW = glorot_uniform(rng)),
                 ),
                 optimizer = ADAM(),
             ) |> cpu,
@@ -1292,7 +1309,7 @@ function RLCore.Experiment(
         ),
     )
 
-    stop_condition = StopAfterEpisode(500)
+    stop_condition = StopAfterEpisode(50)
 
     total_reward_per_episode = TotalRewardPerEpisode()
     time_per_step = TimePerStep()
@@ -1304,6 +1321,7 @@ function RLCore.Experiment(
                 @info(
                     "training",
                     loss = agent.policy.loss,
+                    baseline_loss = agent.policy.baseline_loss,
                     reward = total_reward_per_episode.rewards[end],
                 )
             end

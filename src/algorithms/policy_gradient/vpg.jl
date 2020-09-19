@@ -5,10 +5,25 @@ using Random: shuffle
 using ReinforcementLearningBase
 using ReinforcementLearningCore
 
-export VPGPolicy
+export VPGPolicy, GaussianNetwork
+
+struct GaussianNetwork
+    pre::Chain
+    μ::Chain
+    σ::Chain
+end
+Flux.@functor GaussianNetwork
+function (m::GaussianNetwork)(S)
+    x = m.pre(S)
+    m.μ(x), m.σ(x) .|> exp
+end
 
 """
 Vanilla Policy Gradient
+
+if the action space is continuous,
+then the env should transform the action value, (such as using tanh),
+in order to make sure low ≤ value ≤ high
 """
 Base.@kwdef mutable struct VPGPolicy{
     A<:NeuralNetworkApproximator,
@@ -69,9 +84,9 @@ See
 * [Diagonal Gaussian Policies](https://spinningup.openai.com/en/latest/spinningup/rl_intro.html#stochastic-policies
 * [Clipped Action Policy Gradient](https://arxiv.org/pdf/1802.07564.pdf)
 """
-function (π::VPGPolicy)(logits, actions::ContinuousSpace)
-    dist = π.dist(logits[1], exp(logits[2]))
-    action = clamp(rand(π.rng, dist), actions.low, actions.high)
+function (π::VPGPolicy)(logits, ::ContinuousSpace)
+    dist = π.dist.(logits...)
+    action = rand.(π.rng, dist)[1]
 end
 
 function (π::VPGPolicy)(logits, actions::MultiDiscreteSpace)
@@ -88,7 +103,7 @@ function RLBase.update!(π::VPGPolicy, traj::ElasticCompactSARTSATrajectory)
     error("not supported")
 end
 
-function RLBase.update!(π::VPGPolicy, traj::ElasticCompactSARTSATrajectory, ::DiscreteSpace)
+function RLBase.update!(π::VPGPolicy, traj::ElasticCompactSARTSATrajectory, action_space)
     (length(traj[:terminal]) > 0 && traj[:terminal][end]) || return
 
     model = π.approximator
@@ -101,7 +116,7 @@ function RLBase.update!(π::VPGPolicy, traj::ElasticCompactSARTSATrajectory, ::D
     for idx in Iterators.partition(shuffle(1:length(traj[:terminal])), π.batch_size)
         S = states[:, idx] |> to_dev
         A = actions[idx]
-        G = gains[idx] |> x -> Flux.unsqueeze(x, 1) |> to_dev
+        G = gains[idx] |> to_dev |> x -> Flux.unsqueeze(x, 1)
         # gains is a 1 colomn array, but the ouput of flux model is 1 row, n_batch columns array. so unsqueeze it.
 
         if typeof(π.baseline) <: NeuralNetworkApproximator
@@ -122,8 +137,13 @@ function RLBase.update!(π::VPGPolicy, traj::ElasticCompactSARTSATrajectory, ::D
         end
 
         gs = gradient(Flux.params(model)) do
-            log_prob = S |> model |> logsoftmax
-            log_probₐ = log_prob[CartesianIndex.(A, 1:length(A))]
+            if typeof(action_space) <: DiscreteSpace
+                log_prob = S |> model |> logsoftmax
+                log_probₐ = log_prob[CartesianIndex.(A, 1:length(A))]
+            elseif typeof(action_space) <: ContinuousSpace
+                dist = π.dist.(model(S)...) # TODO: Normal. does not work on GPU. InvalidIRError.
+                log_probₐ = logpdf.(dist, A)
+            end
             loss = -mean(log_probₐ .* δ) * π.α_θ
             ignore() do
                 π.loss = loss
@@ -132,38 +152,5 @@ function RLBase.update!(π::VPGPolicy, traj::ElasticCompactSARTSATrajectory, ::D
         end
         update!(model, gs)
     end
-    empty!(traj)
-end
-
-function RLBase.update!(
-    π::VPGPolicy,
-    traj::ElasticCompactSARTSATrajectory,
-    ::ContinuousSpace,
-)
-    (length(traj[:terminal]) > 0 && traj[:terminal][end]) || return
-
-    model = π.approximator
-    to_dev(x) = send_to_device(device(model), x)
-
-    states = traj[:state] |> to_dev
-    actions = traj[:action]
-    gains =
-        traj[:reward] |>
-        x -> discount_rewards(x, π.γ) |> x -> normalise(x; dims = 1) |> to_dev
-
-    # TODO: fix bug
-    gs = gradient(Flux.params(model)) do
-        logits = states |> model
-        @views μ, σ = logits[1, :], exp.(logits[2, :])
-        dist = π.dist.(μ, σ)
-        log_probₐ = logpdf.(dist, actions)
-        loss = -mean(log_probₐ .* gains) * π.α
-        ignore() do
-            π.loss = loss
-        end
-        loss
-    end
-
-    update!(model, gs)
     empty!(traj)
 end
