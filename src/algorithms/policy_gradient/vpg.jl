@@ -101,35 +101,37 @@ function RLBase.update!(π::VPGPolicy, traj::ElasticCompactSARTSATrajectory, ::D
 
     states = traj[:state] |> to_dev #|> x -> stack.(to_chunks(unstack(x, 2)), 2)
     actions = traj[:action] #|> to_chunks
-    gains = traj[:reward] |> x -> discount_rewards(x, π.γ) |> to_dev #|> to_chunks
+    # gains is a 1 colomn array, but the ouput of flux model is 1 row, n_batch columns array. so unsqueeze it.
+    gains =
+        traj[:reward] |>
+        x -> discount_rewards(x, π.γ) |> x -> Flux.unsqueeze(x, 1) |> to_dev #|> to_chunks
 
     if typeof(π.baseline) <: NeuralNetworkApproximator
+        δ = gains - π.baseline(states)
         gs = gradient(Flux.params(π.baseline)) do
             # TODO: is the loss function correct?
-            loss = mse(π.baseline(states), gains')
+            loss = mse(π.baseline(states), gains) * π.α_w
             ignore() do
                 π.baseline_loss = loss
             end
             loss
         end
-        gains -= π.baseline(states)[1, :]
         update!(π.baseline, gs)
     end
     if typeof(π.baseline) <: Nothing
         # it seems normalise should not be used with baseline
-        gains = gains |> x -> normalise(x; dims = 1)
+        δ = gains |> x -> normalise(x; dims = 2)
     end
 
     gs = gradient(Flux.params(model)) do
         log_prob = states |> model |> logsoftmax
         log_probₐ = log_prob[CartesianIndex.(actions, 1:length(actions))]
-        loss = -mean(log_probₐ .* gains) * π.α_θ
+        loss = -mean(log_probₐ .* δ) * π.α_θ
         ignore() do
             π.loss = loss
         end
         loss
     end
-
     update!(model, gs)
     empty!(traj)
 end
