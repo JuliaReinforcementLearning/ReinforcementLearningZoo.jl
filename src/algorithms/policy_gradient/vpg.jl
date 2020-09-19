@@ -119,7 +119,7 @@ function RLBase.update!(π::VPGPolicy, traj::ElasticCompactSARTSATrajectory, ::D
         update!(π.baseline, gs)
     end
     if typeof(π.baseline) <: Nothing
-        # it seems normalise should not be used with baseline
+        # normalise should not be used with baseline. or the loss of the policy will be too small.
         δ = gains |> x -> normalise(x; dims = 2)
     end
 
