@@ -1256,12 +1256,93 @@ end
 function RLCore.Experiment(
     ::Val{:JuliaRL},
     ::Val{:VPG},
+    ::Val{:PendulumD},
+    ::Nothing;
+    save_dir = nothing,
+    seed = 2213,
+)
+    if isnothing(save_dir)
+        t = Dates.format(now(), "yyyy_mm_dd_HH_MM_SS")
+        save_dir = joinpath(pwd(), "checkpoints", "JuliaRL_VPG_PendulumD_$(t)")
+    end
+
+    lg = TBLogger(joinpath(save_dir, "tb_log"), min_level = Logging.Info)
+    rng = MersenneTwister(seed)
+    env = PendulumEnv(;
+        T = Float32,
+        rng = rng,
+        continuous = false,
+        n_actions = 3,
+        max_steps = 100,
+    )
+    ns, na = length(get_state(env)), length(get_actions(env))
+
+    agent = Agent(
+        policy = VPGPolicy(
+            approximator = NeuralNetworkApproximator(
+                model = Chain(
+                    Dense(ns, 128, relu; initW = glorot_uniform(rng)),
+                    Dense(128, 128, relu; initW = glorot_uniform(rng)),
+                    Dense(128, na; initW = glorot_uniform(rng)),
+                ),
+                optimizer = ADAM(),
+            ) |> cpu,
+            baseline = NeuralNetworkApproximator(
+                model = Chain(
+                    Dense(ns, 128, relu; initW = glorot_uniform(rng)),
+                    Dense(128, 128, relu; initW = glorot_uniform(rng)),
+                    Dense(128, 1; initW = glorot_uniform(rng)),
+                ),
+                optimizer = ADAM(),
+            ) |> cpu,
+            γ = 0.99f0,
+            rng = rng,
+        ),
+        trajectory = ElasticCompactSARTSATrajectory(
+            state_type = Float32,
+            state_size = (ns,),
+        ),
+    )
+
+    total_reward_per_episode = TotalRewardPerEpisode()
+    time_per_step = TimePerStep()
+    hook = ComposedHook(
+        total_reward_per_episode,
+        time_per_step,
+        DoEveryNEpisode() do t, agent, env
+            with_logger(lg) do
+                @info(
+                    "training",
+                    loss = agent.policy.loss,
+                    baseline_loss = agent.policy.baseline_loss,
+                    reward = total_reward_per_episode.rewards[end],
+                )
+            end
+        end,
+        DoEveryNEpisode(5000) do t, agent, env
+            RLCore.save(save_dir, agent)
+            BSON.@save joinpath(save_dir, "stats.bson") total_reward_per_episode time_per_step
+        end,
+    )
+
+    Experiment(
+        agent,
+        env,
+        StopAfterEpisode(5000),
+        hook,
+        Description("# Play Pendulum(Discrete) with VPG", save_dir),
+    )
+end
+
+function RLCore.Experiment(
+    ::Val{:JuliaRL},
+    ::Val{:VPG},
     ::Val{:Pendulum},
     ::Nothing;
     save_dir = nothing,
     seed = 123,
 )
-# TODO: vpg does not work.
+    # TODO: vpg does not work.
     if isnothing(save_dir)
         t = Dates.format(now(), "yyyy_mm_dd_HH_MM_SS")
         save_dir = joinpath(pwd(), "checkpoints", "JuliaRL_VPG_Pendulum_$(t)")
@@ -1270,7 +1351,7 @@ function RLCore.Experiment(
     lg = TBLogger(joinpath(save_dir, "tb_log"), min_level = Logging.Info)
     rng = MersenneTwister(seed)
 
-    inner_env = PendulumEnv(; T = Float32, rng = rng)
+    inner_env = PendulumEnv(; T = Float32, rng = rng, max_steps = 100)
     high, low = get_actions(inner_env) |> x -> (x.low, x.high)
     TransformAction(A) = low + (tanh(A) + 1) * 0.5 * (high - low)
     env = inner_env |> ActionTransformedEnv(TransformAction)
@@ -1310,8 +1391,6 @@ function RLCore.Experiment(
         ),
     )
 
-    stop_condition = StopAfterEpisode(50)
-
     total_reward_per_episode = TotalRewardPerEpisode()
     time_per_step = TimePerStep()
     hook = ComposedHook(
@@ -1320,7 +1399,7 @@ function RLCore.Experiment(
         DoEveryNStep() do t, agent, env
             a = agent(env)
             with_logger(lg) do
-                @info "step" action = a inner = TransformAction(a) reward = get_reward(env)
+                @info "step" action = a inner = TransformAction(a)
             end
         end,
         DoEveryNEpisode() do t, agent, env
@@ -1336,7 +1415,11 @@ function RLCore.Experiment(
         end,
     )
 
-    description = Description("# Play Pendulum with VPG", save_dir)
-
-    Experiment(agent, env, stop_condition, hook, description)
+    Experiment(
+        agent,
+        env,
+        StopAfterEpisode(500),
+        hook,
+        Description("# Play Pendulum with VPG", save_dir),
+    )
 end
