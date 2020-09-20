@@ -1272,7 +1272,8 @@ function RLCore.Experiment(
 
     inner_env = PendulumEnv(; T = Float32, rng = rng)
     high, low = get_actions(inner_env) |> x -> (x.low, x.high)
-    env = inner_env |> ActionTransformedEnv(x -> low + (tanh(x) + 1) * 0.5 * (high - low))
+    TransformAction(A) = low + (tanh(A) + 1) * 0.5 * (high - low)
+    env = inner_env |> ActionTransformedEnv(TransformAction)
     ns = length(get_state(env))
 
     agent = Agent(
@@ -1316,6 +1317,12 @@ function RLCore.Experiment(
     hook = ComposedHook(
         total_reward_per_episode,
         time_per_step,
+        DoEveryNStep() do t, agent, env
+            a = agent(env)
+            with_logger(lg) do
+                @info "step" action = a inner = TransformAction(a) reward = get_reward(env)
+            end
+        end,
         DoEveryNEpisode() do t, agent, env
             with_logger(lg) do
                 @info(
@@ -1323,6 +1330,7 @@ function RLCore.Experiment(
                     loss = agent.policy.loss,
                     baseline_loss = agent.policy.baseline_loss,
                     reward = total_reward_per_episode.rewards[end],
+                    log_step_increment = 0,
                 )
             end
         end,
