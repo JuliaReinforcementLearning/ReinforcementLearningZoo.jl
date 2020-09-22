@@ -86,20 +86,20 @@ function (π::VPGPolicy)(env::MultiThreadEnv)
     # TODO: can PG support multi env? PG only get updated at the end of an episode.
 end
 
-@views function RLBase.update!(π::VPGPolicy, traj::ElasticCompactSARTSATrajectory)
+function RLBase.update!(π::VPGPolicy, traj::ElasticCompactSARTSATrajectory)
     (length(traj[:terminal]) > 0 && traj[:terminal][end]) || return
 
     model = π.approximator
     to_dev(x) = send_to_device(device(model), x)
 
     states = traj[:state]
-    actions = traj[:action]
+    actions = traj[:action] |> Array # need to convert ElasticArray to Array, or code will fail on gpu. `log_prob[CartesianIndex.(A, 1:length(A))`
     gains = traj[:reward] |> x -> discount_rewards(x, π.γ)
 
     for idx in Iterators.partition(shuffle(1:length(traj[:terminal])), π.batch_size)
         S = select_last_dim(states, idx) |> to_dev
         A = actions[idx]
-        G = gains[idx] |> to_dev |> x -> Flux.unsqueeze(x, 1)
+        G = gains[idx] |> x -> Flux.unsqueeze(x, 1) |> to_dev
         # gains is a 1 colomn array, but the ouput of flux model is 1 row, n_batch columns array. so unsqueeze it.
 
         if π.baseline isa NeuralNetworkApproximator
