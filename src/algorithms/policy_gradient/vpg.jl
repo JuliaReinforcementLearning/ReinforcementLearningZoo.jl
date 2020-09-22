@@ -21,6 +21,21 @@ end
 """
 Vanilla Policy Gradient
 
+VPGPolicy(;kwargs)
+
+# Keyword arguments
+- `approximator`,
+- `baseline`,
+- `dist`, distribution function of the action
+- `γ`, discount factor
+- `α_θ`, step size of policy parameter
+- `α_w`, step size of baseline parameter
+- `batch_size`,
+- `rng`,
+- `loss`,
+- `baseline_loss`,
+
+
 if the action space is continuous,
 then the env should transform the action value, (such as using tanh),
 in order to make sure low ≤ value ≤ high
@@ -103,7 +118,11 @@ function RLBase.update!(π::VPGPolicy, traj::ElasticCompactSARTSATrajectory)
     error("not supported")
 end
 
-function RLBase.update!(π::VPGPolicy, traj::ElasticCompactSARTSATrajectory, action_space)
+@views function RLBase.update!(
+    π::VPGPolicy,
+    traj::ElasticCompactSARTSATrajectory,
+    action_space,
+)
     (length(traj[:terminal]) > 0 && traj[:terminal][end]) || return
 
     model = π.approximator
@@ -114,33 +133,34 @@ function RLBase.update!(π::VPGPolicy, traj::ElasticCompactSARTSATrajectory, act
     gains = traj[:reward] |> x -> discount_rewards(x, π.γ)
 
     for idx in Iterators.partition(shuffle(1:length(traj[:terminal])), π.batch_size)
-        S = states[:, idx] |> to_dev
+        S = select_last_dim(states, idx) |> to_dev
         A = actions[idx]
         G = gains[idx] |> to_dev |> x -> Flux.unsqueeze(x, 1)
         # gains is a 1 colomn array, but the ouput of flux model is 1 row, n_batch columns array. so unsqueeze it.
 
-        if typeof(π.baseline) <: NeuralNetworkApproximator
-            δ = G - π.baseline(S)
+        if π.baseline isa NeuralNetworkApproximator
             gs = gradient(Flux.params(π.baseline)) do
-                # TODO: is the loss function correct?
-                loss = mse(π.baseline(S), G) * π.α_w
+                δ = G - π.baseline(S)
+                loss = mean(δ .^ 2) * π.α_w # mse
                 ignore() do
                     π.baseline_loss = loss
                 end
                 loss
             end
             update!(π.baseline, gs)
-        end
-        if typeof(π.baseline) <: Nothing
+        elseif π.baseline isa Nothing
+            # See
+            # (http://rail.eecs.berkeley.edu/deeprlcourse-fa17/f17docs/hw2_final.pdf)
+            # (https://web.stanford.edu/class/cs234/assignment3/solution.pdf)
             # normalise should not be used with baseline. or the loss of the policy will be too small.
             δ = G |> x -> normalise(x; dims = 2)
         end
 
         gs = gradient(Flux.params(model)) do
-            if typeof(action_space) <: DiscreteSpace
+            if action_space isa DiscreteSpace
                 log_prob = S |> model |> logsoftmax
                 log_probₐ = log_prob[CartesianIndex.(A, 1:length(A))]
-            elseif typeof(action_space) <: ContinuousSpace
+            elseif action_space isa ContinuousSpace
                 dist = π.dist.(model(S)...) # TODO: Normal. does not work on GPU. InvalidIRError.
                 log_probₐ = logpdf.(dist, A)
             end
