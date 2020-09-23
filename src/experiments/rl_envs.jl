@@ -1332,7 +1332,7 @@ function RLCore.Experiment(
     Experiment(
         agent,
         env,
-        StopAfterEpisode(5000),
+        StopAfterEpisode(3000),
         hook,
         Description("# Play Pendulum(Discrete) with VPG", save_dir),
     )
@@ -1344,9 +1344,8 @@ function RLCore.Experiment(
     ::Val{:Pendulum},
     ::Nothing;
     save_dir = nothing,
-    seed = 123,
+    seed = 5574, # a good seed is important.
 )
-    # TODO: vpg does not work.
     if isnothing(save_dir)
         t = Dates.format(now(), "yyyy_mm_dd_HH_MM_SS")
         save_dir = joinpath(pwd(), "checkpoints", "JuliaRL_VPG_Pendulum_$(t)")
@@ -1357,7 +1356,7 @@ function RLCore.Experiment(
 
     inner_env = PendulumEnv(; T = Float32, rng = rng, max_steps = 100)
     high, low = get_actions(inner_env) |> x -> (x.low, x.high)
-    TransformAction(A) = low + (tanh(A) + 1) * 0.5 * (high - low)
+    TransformAction(A) = tanh(A) * 0.5f0 * (high - low) + (high + low) / 2 # tanh's output ∈ [-1,1]
     env = inner_env |> ActionTransformedEnv(TransformAction)
     ns = length(get_state(env))
 
@@ -1365,16 +1364,14 @@ function RLCore.Experiment(
         policy = VPGPolicy(
             approximator = NeuralNetworkApproximator(
                 model = GaussianNetwork(
-                    Chain(Dense(ns, 30, relu), Dense(30, 30, relu)),
-                    Chain(Dense(30, 1, initW = glorot_uniform(rng))),
-                    Chain(Dense(
-                        30,
-                        1,
-                        x -> min(max(x, typeof(x)(-20)), typeof(x)(2)),
-                        initW = glorot_uniform(rng),
-                    )),
+                    Chain(
+                        Dense(ns, 128, relu, initW = glorot_uniform(rng)),
+                        Dense(128, 128, relu, initW = glorot_uniform(rng)),
+                    ),
+                    Chain(Dense(128, 1, x -> 2 * tanh(x), initW = glorot_uniform(rng))), # limit the range of μ in [-2,2]
+                    Chain(x -> -0.5), # use a fixed σ. its too difficult to learn 2 parameters at the same time.
                 ),
-                optimizer = ADAM(0.003),
+                optimizer = ADAM(0.001),
             ) |> cpu,
             baseline = NeuralNetworkApproximator(
                 model = Chain(
@@ -1401,7 +1398,8 @@ function RLCore.Experiment(
     hook = ComposedHook(
         total_reward_per_episode,
         time_per_step,
-        DoEveryNStep() do t, agent, env
+        DoEveryNStep(10) do t, agent, env
+            # log the distribution of action values.
             a = agent(env)
             with_logger(lg) do
                 @info "step" action = a inner = TransformAction(a)
@@ -1423,7 +1421,7 @@ function RLCore.Experiment(
     Experiment(
         agent,
         env,
-        StopAfterEpisode(500),
+        StopAfterEpisode(150),
         hook,
         Description("# Play Pendulum with VPG", save_dir),
     )
