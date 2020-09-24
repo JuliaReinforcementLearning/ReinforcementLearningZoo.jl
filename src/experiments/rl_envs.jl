@@ -1344,8 +1344,13 @@ function RLCore.Experiment(
     ::Val{:Pendulum},
     ::Nothing;
     save_dir = nothing,
-    seed = 5574, # a good seed is important.
+    seed = 5574,
 )
+    #= TODO:
+    This only acts as a template implementation for the vpg in a continuous action space.
+    Due to it doesn't converge in most cases. it only works with a few random seeds.
+    I'm not sure if it's the limitation of VPG, or I used wrong hyper parameters.
+    =#
     if isnothing(save_dir)
         t = Dates.format(now(), "yyyy_mm_dd_HH_MM_SS")
         save_dir = joinpath(pwd(), "checkpoints", "JuliaRL_VPG_Pendulum_$(t)")

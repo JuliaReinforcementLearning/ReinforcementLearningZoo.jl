@@ -125,7 +125,7 @@ function RLBase.update!(π::VPGPolicy, traj::ElasticCompactSARTSATrajectory)
                 log_prob = S |> model |> logsoftmax
                 log_probₐ = log_prob[CartesianIndex.(A, 1:length(A))]
             elseif π.action_space isa ContinuousSpace
-                dist = π.dist.(model(S)...) # TODO: Normal. does not work on GPU. InvalidIRError.
+                dist = π.dist.(model(S)...) # TODO: this part does not work on GPU. See: https://github.com/JuliaStats/Distributions.jl/issues/1183 .
                 log_probₐ = logpdf.(dist, A)
             end
             loss = -mean(log_probₐ .* δ) * π.α_θ
