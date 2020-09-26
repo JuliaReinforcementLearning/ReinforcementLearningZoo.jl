@@ -21,7 +21,11 @@ export PPOPolicy
 - `actor_loss_weight = 1.0f0`,
 - `critic_loss_weight = 0.5f0`,
 - `entropy_loss_weight = 0.01f0`,
+- `dist = Categorical`,
 - `rng = Random.GLOBAL_RNG`,
+
+By default, `dist` is set to `Categorical`, which means it will only works
+on environments of discrete actions. To work with environments of
 """
 mutable struct PPOPolicy{A<:ActorCritic,D,R} <: AbstractPolicy
     approximator::A
@@ -34,7 +38,6 @@ mutable struct PPOPolicy{A<:ActorCritic,D,R} <: AbstractPolicy
     actor_loss_weight::Float32
     critic_loss_weight::Float32
     entropy_loss_weight::Float32
-    dist::D
     rng::R
     # for logging
     norm::Matrix{Float32}
@@ -58,7 +61,7 @@ function PPOPolicy(;
     dist = Categorical,
     rng = Random.GLOBAL_RNG,
 )
-    PPOPolicy(
+    PPOPolicy{typeof(approximator),dist,typeof(rng)}(
         approximator,
         γ,
         λ,
@@ -69,7 +72,6 @@ function PPOPolicy(;
         actor_loss_weight,
         critic_loss_weight,
         entropy_loss_weight,
-        dist,
         rng,
         zeros(Float32, n_microbatches, n_epochs),
         zeros(Float32, n_microbatches, n_epochs),
@@ -79,14 +81,14 @@ function PPOPolicy(;
     )
 end
 
-function RLBase.get_prob(p::PPOPolicy{<:ActorCritic{<:GaussianNetwork}, <:Type{Normal}}, state::AbstractArray)
+function RLBase.get_prob(p::PPOPolicy{<:ActorCritic{<:NeuralNetworkApproximator{<:GaussianNetwork}}, Normal}, state::AbstractArray)
     p.approximator.actor(send_to_device(
         device(p.approximator),
         state,
     )) |> send_to_host |> StructArray{Normal}
 end
 
-function RLBase.get_prob(p::PPOPolicy{<:ActorCritic, <:Type{Categorical}}, state::AbstractArray)
+function RLBase.get_prob(p::PPOPolicy{<:ActorCritic, Categorical}, state::AbstractArray)
     logits = p.approximator.actor(send_to_device(
         device(p.approximator),
         state,
@@ -102,7 +104,7 @@ function RLBase.get_prob(p::PPOPolicy, env::AbstractEnv)
     get_prob(p, s)[1]
 end
 
-(p::PPOPolicy)(env::MultiThreadEnv) = [rand(p.rng, x) for x in get_prob(p, env)]
+(p::PPOPolicy)(env::MultiThreadEnv) = rand.(p.rng, get_prob(p, env))
 (p::PPOPolicy)(env::AbstractEnv) = rand(p.rng, get_prob(p, env))
 
 function RLBase.update!(p::PPOPolicy, t::PPOTrajectory)
@@ -159,7 +161,7 @@ function RLBase.update!(p::PPOPolicy, t::PPOTrajectory)
             ps = Flux.params(AC)
             gs = gradient(ps) do
                 v′ = AC.critic(s) |> vec
-                if AC.actor isa GaussianNetwork
+                if AC.actor isa NeuralNetworkApproximator{<:GaussianNetwork}
                     μ, σ = AC.actor(s)
                     log_p′ₐ = normlogpdf(μ, σ, a)
                     entropy_loss = mean((log(2.0f0π)+1)/2 .+ log.(σ))
@@ -196,11 +198,13 @@ function RLBase.update!(p::PPOPolicy, t::PPOTrajectory)
     end
 end
 
-function (agent::Agent{<:PPOPolicy})(::Training{PreActStage}, env::MultiThreadEnv)
+function (agent::Agent{<:Union{PPOPolicy, RandomStartPolicy{<:PPOPolicy}}})(::Training{PreActStage}, env::MultiThreadEnv)
     state = get_state(env)
     dist = get_prob(agent.policy, env)
     if dist isa Matrix{<:Number}
         dist = [Categorical(x;check_args=false) for x in eachcol(dist)]
+    elseif dist isa Vector{<:Vector{<:Number}}
+        dist = [Categorical(x;check_args=false) for x in dist]
     end
     action = [rand(agent.policy.rng, d) for d in dist]
     action_log_prob = [logpdf(d, a) for (d, a) in zip(dist, action)]
