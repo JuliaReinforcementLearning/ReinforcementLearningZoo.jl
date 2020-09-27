@@ -1,7 +1,7 @@
 include("ppo_trajectory.jl")
 
 using Random
-using Distributions
+using Distributions: Categorical, Normal, logpdf
 using StructArrays
 
 export PPOPolicy
