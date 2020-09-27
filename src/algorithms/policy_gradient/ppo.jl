@@ -206,7 +206,7 @@ function (agent::Agent{<:Union{PPOPolicy, RandomStartPolicy{<:PPOPolicy}}})(::Tr
     elseif dist isa Vector{<:Vector{<:Number}}
         dist = [Categorical(x;check_args=false) for x in dist]
     end
-    action = [rand(agent.policy.rng, d) for d in dist]
+    action = agent.policy(env)
     action_log_prob = [logpdf(d, a) for (d, a) in zip(dist, action)]
     push!(
         agent.trajectory;

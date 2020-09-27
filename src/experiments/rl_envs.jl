@@ -1236,7 +1236,10 @@ function RLCore.Experiment(
                             Dense(64, 1, tanh; initW = glorot_uniform(rng)),
                             vec,
                         ),
-                        σ = x -> zeros(Float32, size(x)[end])  # set log_std to 0. Convert to CuArray when running on GPU
+                        σ =Chain(
+                            Dense(64, 1; initW = glorot_uniform(rng)),
+                            vec,
+                        ),
                     ),
                     optimizer = ADAM(3e-4),
                 ),
@@ -1276,7 +1279,7 @@ function RLCore.Experiment(
     ),
     )
 
-    stop_condition = StopAfterStep(2_000_000)
+    stop_condition = StopAfterStep(500_000)
     total_reward_per_episode = TotalBatchRewardPerEpisode(N_ENV)
     hook = ComposedHook(
         total_reward_per_episode,
