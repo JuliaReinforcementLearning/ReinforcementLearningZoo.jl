@@ -201,12 +201,22 @@ end
 function (agent::Agent{<:Union{PPOPolicy, RandomStartPolicy{<:PPOPolicy}}})(::Training{PreActStage}, env::MultiThreadEnv)
     state = get_state(env)
     dist = get_prob(agent.policy, env)
+
+    # currently RandomPolicy returns a Matrix instead of a (vector of) distribution.
     if dist isa Matrix{<:Number}
         dist = [Categorical(x;check_args=false) for x in eachcol(dist)]
     elseif dist isa Vector{<:Vector{<:Number}}
         dist = [Categorical(x;check_args=false) for x in dist]
     end
-    action = agent.policy(env)
+
+    # !!! a little ugly
+    rng = if agent.policy isa PPOPolicy
+        agent.policy.rng
+    elseif agent.policy isa RandomStartPolicy
+        agent.policy.policy.rng
+    end
+
+    action = [rand(rng, d) for d in dist]
     action_log_prob = [logpdf(d, a) for (d, a) in zip(dist, action)]
     push!(
         agent.trajectory;
