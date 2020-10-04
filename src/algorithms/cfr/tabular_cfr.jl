@@ -42,12 +42,6 @@ function TabularCFRPolicy(;
     is_reset_neg_regrets = false,
     is_linear_averaging = false,
 )
-    @assert NumAgentStyle(env) isa MultiAgent
-    @assert DynamicStyle(env) === SEQUENTIAL
-    @assert RewardStyle(env) === TERMINAL_REWARD
-    @assert ChanceStyle(env) === EXPLICIT_STOCHASTIC
-    @assert DefaultStateStyle(env) === Information{String}()
-
     nodes = init_info_state_nodes(env)
 
     for i in 1:n_iter
