@@ -22,7 +22,7 @@ end
 # TabularCFRPolicy
 #####
 
-mutable struct TabularCFRPolicy{S,T,R<:AbstractRNG} <: AbstractPolicy
+mutable struct TabularCFRPolicy{S,T,R<:AbstractRNG} <: AbstractCFRPolicy
     nodes::Dict{S,InfoStateNode}
     behavior_policy::QBasedPolicy{TabularLearner{S,T},WeightedExplorer{true,R}}
     is_reset_neg_regrets::Bool
@@ -67,10 +67,7 @@ function TabularCFRPolicy(;
     n_iteration=1)
     TabularCFRPolicy(
         Dict{state_type, InfoStateNode}(),
-        QBasedPolicy(;
-            learner = TabularLearner{state_type}(),
-            explorer = WeightedExplorer(; is_normalized = true, rng = rng),
-        ),
+        TabularRandomPolicy(;rng=rng, table=Dict{state_type,Vector{Float64}}(), is_normalized=true),
         is_reset_neg_regrets,
         is_linear_averaging,
         weighted_averaging_delay,
@@ -97,14 +94,14 @@ end
 function RLBase.update!(p::TabularCFRPolicy, env::AbstractEnv)
     w = p.is_linear_averaging ? max(p.n_iteration - p.weighted_averaging_delay, 0) : 1
     if p.is_alternating_update
-        for p in get_players(env)
-            if p != get_chance_player(env)
-                cfr!(p.nodes, env, p, w, p.is_reset_neg_regrets)
+        for x in get_players(env)
+            if x != get_chance_player(env)
+                cfr!(p.nodes, env, x, w)
                 regret_matching!(p)
             end
         end
     else
-        cfr!(p.nodes, env, nothing, w, p.is_reset_neg_regrets)
+        cfr!(p.nodes, env, nothing, w)
         regret_matching!(p)
     end
     p.n_iteration += 1
@@ -123,23 +120,22 @@ V: a vector containing the `v` after taking each action with current information
 """
 function cfr!(nodes, env, p, w, π=Dict(x=>1.0 for x in get_players(env)))
     if get_terminal(env)
-        get_reward(env, player)
+        get_reward(env, p)
     else
         if get_current_player(env) == get_chance_player(env)
             v = 0.0
             for a::ActionProbPair in get_legal_actions(env)
                 π′ = copy(π)
                 π′[get_current_player(env)] *= a.prob
-                v +=
-                    a.prob * cfr!(nodes, child(env, a), player, w, π′)
+                v += a.prob * cfr!(nodes, child(env, a), p, w, π′)
             end
             v
         else
             v = 0.0
-            node = nodes[get_state(env)]
             legal_actions = get_legal_actions(env)
+            node = get!(nodes, get_state(env), InfoStateNode(length(legal_actions)))
 
-            is_update = isnothing(player) || player == get_current_player(env)
+            is_update = isnothing(p) || p == get_current_player(env)
             V = is_update ? Vector{Float64}(undef, length(legal_actions)) : nothing
 
             for (i, a) in enumerate(legal_actions)
@@ -147,7 +143,7 @@ function cfr!(nodes, env, p, w, π=Dict(x=>1.0 for x in get_players(env)))
                 π′ = copy(π)
                 π′[get_current_player(env)] *= σᵢ
 
-                vₐ = cfr!(nodes, child(env, a), player, w, π′)
+                vₐ = cfr!(nodes, child(env, a), p, w, π′)
                 is_update && (V[i] = vₐ)
                 v += σᵢ * vₐ
             end
