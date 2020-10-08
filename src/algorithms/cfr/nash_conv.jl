@@ -38,6 +38,6 @@ function nash_conv(π, env;is_reduce=true)
     if is_reduce
         mapreduce(-, +, σ′, σ)
     else
-        map(-, +, σ′, σ)
+        map(-, σ′, σ)
     end
 end

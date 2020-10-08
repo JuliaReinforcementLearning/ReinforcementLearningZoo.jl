@@ -8,16 +8,6 @@ end
 
 InfoStateNode(n) = InfoStateNode(fill(1 / n, n), zeros(n), zeros(n))
 
-function init_info_state_nodes(env::AbstractEnv)
-    nodes = Dict{String,InfoStateNode}()
-    walk(env) do x
-        if !get_terminal(x) && get_current_player(x) != get_chance_player(x)
-            get!(nodes, get_state(x), InfoStateNode(length(get_legal_actions(x))))
-        end
-    end
-    nodes
-end
-
 #####
 # TabularCFRPolicy
 #####
