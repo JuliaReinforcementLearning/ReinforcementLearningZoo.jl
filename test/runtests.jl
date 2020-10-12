@@ -8,6 +8,24 @@ using Statistics
 using Random
 using OpenSpiel
 
+function get_optimal_kuhn_policy(α=0.2)
+    TabularRandomPolicy(table=Dict(
+        "0"   => [1 - α, α],
+        "0pb" => [1., 0.],
+        "1"   => [1., 0.],
+        "1pb" => [2. / 3. - α, 1. / 3. + α],
+        "2"   => [1 - 3 * α, 3 * α],
+        "2pb" => [0., 1.],
+
+        "0p"  => [2. / 3., 1. / 3.],
+        "0b"  => [1., 0.],
+        "1p"  => [1., 0.],
+        "1b"  => [2. / 3., 1. / 3.],
+        "2p"  => [0., 1.],
+        "2b"  => [0., 1.],
+    ))
+end
+
 @testset "ReinforcementLearningZoo.jl" begin
 
     @testset "training" begin
