@@ -1,6 +1,6 @@
 abstract type AbstractCFRPolicy <: AbstractPolicy end
 
-function Base.run(p::AbstractCFRPolicy, env::AbstractEnv, stop_condition, hook=EmptyHook())
+function Base.run(p::AbstractCFRPolicy, env::AbstractEnv, stop_condition=StopAfterStep(1), hook=EmptyHook())
     @assert NumAgentStyle(env) isa MultiAgent
     @assert DynamicStyle(env) === SEQUENTIAL
     @assert RewardStyle(env) === TERMINAL_REWARD

@@ -24,12 +24,12 @@ function expected_policy_values(π::AbstractPolicy, env::AbstractEnv)
     end
 end
 
-function nash_conv(π, env;is_reduce=true)
+function nash_conv(π, env;is_reduce=true,kw...)
     e = copy(env)
     RLBase.reset!(e)
 
     σ′ = [
-        best_response_value(BestResponsePolicy(π, e, i), e)
+        best_response_value(BestResponsePolicy(π, e, i;kw...), e)
         for i in get_players(e)
         if i != get_chance_player(e)
     ]
