@@ -1,6 +1,7 @@
 export DeepCFR
 
 using Statistics: mean
+using StatsBase
 
 """
     DeepCFR(;kwargs...)
@@ -17,28 +18,37 @@ Symbols used here follow the paper: [Deep Counterfactual Regret Minimization](ht
 - `MV`, a dictionary of each player's advantage memory.
 - `reinitialize_freq=1`, the frequency of reinitializing the value networks.
 """
-Base.@kwdef mutable struct DeepCFR{TP, TV, TMP, TMV, I, R} <: AbstractCFRPolicy
+Base.@kwdef mutable struct DeepCFR{TP, TV, TMP, TMV, I, R, P} <: AbstractCFRPolicy
     Π::TP
     V::TV
     MΠ::TMP
     MV::TMV
-    K::Int                  = 20
-    t::Int                  = 1
-    reinitialize_freq::Int  = 1
-    batch_size_V::Int       = 32
-    batch_size_Π::Int       = 32
-    n_training_steps_V::Int = 1
-    n_training_steps_Π::Int = 1
-    rng::R                  = Random.GLOBAL_RNG
-    initializer::I          = glorot_uniform(rng)
+    K::Int                    = 20
+    t::Int                    = 1
+    reinitialize_freq::Int    = 1
+    batch_size_V::Int         = 32
+    batch_size_Π::Int         = 32
+    n_training_steps_V::Int   = 1
+    n_training_steps_Π::Int   = 1
+    rng::R                    = Random.GLOBAL_RNG
+    initializer::I            = glorot_normal(rng)
+    max_grad_norm::Float32    = 10.0f0
+    # for logging
+    Π_losses::Vector{Float32} = zeros(Float32, n_training_steps_Π)
+    V_losses::Dict{P, Vector{Float32}} = Dict(k => zeros(Float32, n_training_steps_V) for (k,_) in MV)
+    Π_norms::Vector{Float32} = zeros(Float32, n_training_steps_Π)
+    V_norms::Dict{P, Vector{Float32}} = Dict(k => zeros(Float32, n_training_steps_V) for (k,_) in MV)
 end
 
 function RLBase.get_prob(π::DeepCFR, env::AbstractEnv)
     I = send_to_device(device(π.Π), get_state(env))
-    m = send_to_device(device(π.Π), get_legal_actions_mask(env))
-    σ = softmax(π.Π(I) .+ ifelse.(m, 0.f0, -Inf32))
+    m = send_to_device(device(π.Π), ifelse.(get_legal_actions_mask(env), 0.f0, -Inf32))
+    logits = π.Π(Flux.unsqueeze(I, ndims(I)+1)) |> vec
+    σ = softmax(logits .+ m)
     send_to_host(σ)
 end
+
+(π::DeepCFR)(env::AbstractEnv) = sample(π.rng, get_actions(env), Weights(get_prob(π, env), 1.0))
 
 "Run one interation"
 function RLBase.update!(π::DeepCFR, env::AbstractEnv)
@@ -56,18 +66,32 @@ end
 "Update Π (policy network)"
 function RLBase.update!(π::DeepCFR)
     Π = π.Π
+    Π_losses = π.Π_losses
+    Π_norms = π.Π_norms
     D = device(Π)
     MΠ = π.MΠ
-    for _ in 1:π.n_training_steps_Π
+    ps = Flux.params(Π)
+
+    for x in ps
+        x .= π.initializer(size(x)...)
+    end
+
+    for i in 1:π.n_training_steps_Π
         batch_inds = rand(π.rng, 1:length(MΠ), π.batch_size_Π)
-        I = send_to_device(D, Flux.batch([MΠ[i].I for i in batch_inds]))
-        σ = send_to_device(D, Flux.batch([MΠ[i].σ for i in batch_inds]))
-        t = send_to_device(D, Flux.batch([MΠ[i].t for i in batch_inds]))
-        m = send_to_device(D, Flux.batch([MΠ[i].m for i in batch_inds]))
-        gs = gradient(Flux.params(Π)) do 
-            logits = Π(I) .+ ifelse.(m, 0f0, -Inf32)
-            mean(reshape(t, 1, :) .* ((σ .- softmax(logits)) .^ 2))
+        I = send_to_device(D, Flux.batch([MΠ[:I][i] for i in batch_inds]))
+        σ = send_to_device(D, Flux.batch([MΠ[:σ][i] for i in batch_inds]))
+        t = send_to_device(D, Flux.batch([MΠ[:t][i] / π.t for i in batch_inds]))
+        m = send_to_device(D, Flux.batch([ifelse.(MΠ[:m][i], 0.f0, -Inf32) for i in batch_inds]))
+        gs = gradient(ps) do 
+            logits = Π(I) .+ m
+            loss = mean(reshape(t, 1, :) .* ((σ .- softmax(logits)) .^ 2))
+            ignore() do
+                # println(σ, "!!!",m, "===", Π(I))
+                Π_losses[i] = loss
+            end
+            loss
         end
+        Π_norms[i] = clip_by_global_norm!(gs, ps, π.max_grad_norm)
         update!(Π, gs)
     end
 end
@@ -75,6 +99,8 @@ end
 "Update advantage network"
 function update_advantage_networks(π, p)
     V = π.V[p]
+    V_losses = π.V_losses[p]
+    V_norms = π.V_norms[p]
     MV = π.MV[p]
     if π.t % π.reinitialize_freq == 0
         for x in Flux.params(V)
@@ -83,15 +109,21 @@ function update_advantage_networks(π, p)
         end
     end
     if length(MV) >= π.batch_size_V
-        for _ in 1:π.n_training_steps_V
+        for i in 1:π.n_training_steps_V
             batch_inds = rand(π.rng, 1:length(MV), π.batch_size_V)
-            I = send_to_device(device(V), Flux.batch([MV[i].I for i in batch_inds]))
-            r̃ = send_to_device(device(V), Flux.batch([MV[i].r̃ for i in batch_inds]))
-            t = send_to_device(device(V), Flux.batch([MV[i].t for i in batch_inds]))
-            m = send_to_device(device(V), Flux.batch([MV[i].m for i in batch_inds]))
-            gs = gradient(Flux.params(V)) do 
-                mean(reshape(t, 1, :) .* ((r̃ .- V(I) .* m) .^ 2))
+            I = send_to_device(device(V), Flux.batch([MV[:I][i] for i in batch_inds]))
+            r̃ = send_to_device(device(V), Flux.batch([MV[:r̃][i] for i in batch_inds]))
+            t = send_to_device(device(V), Flux.batch([MV[:t][i] / π.t for i in batch_inds]))
+            m = send_to_device(device(V), Flux.batch([MV[:m][i] for i in batch_inds]))
+            ps = Flux.params(V)
+            gs = gradient(ps) do 
+                loss = mean(reshape(t, 1, :) .* ((r̃ .- V(I) .* m) .^ 2))
+                ignore() do 
+                    V_losses[i] = loss
+                end
+                loss
             end
+            V_norms[i] = clip_by_global_norm!(gs, ps, π.max_grad_norm)
             update!(V, gs)
         end
     end
@@ -110,7 +142,7 @@ function external_sampling!(π::DeepCFR, env::AbstractEnv, p)
         I = send_to_device(device(V), Flux.unsqueeze(s, ndims(s)+1))
         A = get_actions(env)
         m = get_legal_actions_mask(env)
-        σ = masked_regret_matching(V(I) |> vec, m)
+        σ = masked_regret_matching(V(I) |> send_to_host |> vec, m)
         v = zeros(length(σ))
         v̄ = 0.
         for i in 1:length(m)
@@ -119,7 +151,7 @@ function external_sampling!(π::DeepCFR, env::AbstractEnv, p)
                 v̄ += σ[i] * v[i]
             end
         end
-        push!(π.MV[p],(I=s, t = π.t, r̃= v .- v̄, m = m))
+        push!(π.MV[p],I=s, t = π.t, r̃= (v .- v̄) .* m, m = m)
         v̄
     else
         V = π.V[get_current_player(env)]
@@ -127,8 +159,8 @@ function external_sampling!(π::DeepCFR, env::AbstractEnv, p)
         I = send_to_device(device(V), Flux.unsqueeze(s, ndims(s)+1))
         A = get_actions(env)
         m = get_legal_actions_mask(env)
-        σ = masked_regret_matching(V(I) |> vec, m)
-        push!(π.MΠ,(I=s, t = π.t, σ=σ, m = m))
+        σ = masked_regret_matching(V(I) |> send_to_host |> vec, m)
+        push!(π.MΠ, I=s, t = π.t, σ=σ, m = m)
         a = sample(π.rng, A, Weights(σ, 1.0))
         env(a)
         external_sampling!(π, env, p)
@@ -137,12 +169,12 @@ end
 
 "This is the specific regret matching method used in DeepCFR"
 function masked_regret_matching(v, m)
-    v⁺ = max.(v .* m, 0.)
+    v⁺ = max.(v .* m, 0.f0)
     s = sum(v⁺)
     if s > 0
         v⁺ ./= s
     else
-        fill!(v⁺, 0.)
+        fill!(v⁺, 0.f0)
         v⁺[findmax(v, m)[2]] = 1.
     end
     v⁺

@@ -100,7 +100,6 @@ function best_response_action(p, env)
             v = sum(p.cfr_reach_prob[get_state(env)]) do (e, reach_prob)
                 reach_prob * best_response_value(p, child(e, a))
             end
-            # @info "debug" get_state(env) a v
             if v > best_action_value
                 best_action, best_action_value = a, v
             end
