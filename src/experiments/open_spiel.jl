@@ -90,5 +90,6 @@ function RLCore.Experiment(
         batch_size_Π=2048,
         initializer=glorot_normal(CUDA.CURAND.default_rng())
     )
+    # nash_conv ≈ 0.4
     Experiment(p, env, StopAfterStep(500), EmptyHook(), "# run DeepcCFR on leduc_poker")
 end
