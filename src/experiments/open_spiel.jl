@@ -26,7 +26,7 @@ function RLCore.Experiment(
         default_state_style = RLBase.Information{String}(),
         is_chance_agent_required = true,
     )
-    rng = MersenneTwister(seed)
+    rng = StableRNG(seed)
     π = TabularCFRPolicy(;rng = rng)
 
     description = """
