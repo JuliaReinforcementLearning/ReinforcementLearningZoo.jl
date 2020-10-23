@@ -37,7 +37,7 @@ end
 
 function RLCore.Experiment(
     ::Val{:JuliaRL},
-    ::Val{:TabularCFR},
+    ::Val{:DeepCFR},
     ::Val{:OpenSpiel},
     game;
     n_iter = 300,
