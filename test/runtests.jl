@@ -7,6 +7,7 @@ using Flux
 using Statistics
 using Random
 using OpenSpiel
+using StableRNGs
 
 function get_optimal_kuhn_policy(α=0.2)
     TabularRandomPolicy(table=Dict(
