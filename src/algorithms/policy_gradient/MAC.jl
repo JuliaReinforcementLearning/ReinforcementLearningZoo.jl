@@ -6,7 +6,8 @@ using Flux
     MACLearner(;kwargs...)
    Keyword arguments
 - `approximator`::[`ActorCritic`](@ref)
-- `γ::Float32`, reward discount rate.
+- `γ::Float32`, reward discount rate
+-  `bootstrap::bool`, if false then Q function is approximated using monte carlo returns.
 """
 
 Base.@kwdef mutable struct MACLearner{A<:ActorCritic} <:AbstractLearner
@@ -17,7 +18,7 @@ Base.@kwdef mutable struct MACLearner{A<:ActorCritic} <:AbstractLearner
     actor_loss::Float32 = 0.0f0
     critic_loss::Float32 = 0.0f0
     loss::Float32 = 0.0f0
-    bootstrap::Bool = true          #if false then Q function is approximated using monte carlo returns
+    bootstrap::Bool = true         
 end
 
 function (learner::MACLearner)(env::MultiThreadEnv)
