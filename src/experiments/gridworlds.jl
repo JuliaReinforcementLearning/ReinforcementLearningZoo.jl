@@ -83,7 +83,7 @@ function RLCore.Experiment(
                     0
             end
         end,
-        DoEveryNStep(10000) do t, agent, env
+        DoEveryNStep(1000) do t, agent, env
             RLCore.save(save_dir, agent)
             BSON.@save joinpath(save_dir, "stats.bson") total_reward_per_episode time_per_step
         end,
@@ -167,7 +167,7 @@ function RLCore.Experiment(
                     0
             end
         end,
-        DoEveryNStep(10000) do t, agent, env
+        DoEveryNStep(1000) do t, agent, env
             RLCore.save(save_dir, agent)
             BSON.@save joinpath(save_dir, "stats.bson") total_reward_per_episode time_per_step
         end,
