@@ -41,7 +41,7 @@ function RLCore.Experiment(
                 approximator = NeuralNetworkApproximator(
                     model = Chain(
                         Dense(ns, 128, relu; initW = glorot_uniform(rng)),
-                        Dense(128, 128, relu; initW = glorot_uniform(rng)),
+                        # Dense(128, 128, relu; initW = glorot_uniform(rng)),
                         Dense(128, na; initW = glorot_uniform(rng)),
                     ) |> cpu,
                     optimizer = ADAM(),
@@ -66,7 +66,7 @@ function RLCore.Experiment(
         ),
     )
 
-    stop_condition = StopAfterStep(10000)
+    stop_condition = StopAfterStep(1000)
 
     total_reward_per_episode = TotalRewardPerEpisode()
     time_per_step = TimePerStep()
