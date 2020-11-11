@@ -10,7 +10,7 @@ using TensorBoardLogger
 using Logging
 using Random
 
-RLBase.get_state(w::GridWorlds.EmptyGridWorld) = Float64.(vec(GridWorlds.get_agent_view(w)))
+RLBase.get_state(w::GridWorlds.AbstractGridWorld) = Float64.(vec(GridWorlds.get_agent_view(w)))
 
 function RLCore.Experiment(
     ::Val{:JuliaRL},
