@@ -120,8 +120,8 @@ function RLBase.update!(learner::MACLearner, t::AbstractTrajectory)
     update!(AC.critic, gs2)
 end
 
-function (agent::Agent{<:QBasedPolicy{<:MACLearner},<:CircularCompactSARTSATrajectory})(
-    ::Training{PreActStage},
+function (agent::Agent{<:QBasedPolicy{<:MACLearner},<:Trajectory})(
+    # ::Training{PreActStage},
     env,
 )
     action = agent.policy(env)

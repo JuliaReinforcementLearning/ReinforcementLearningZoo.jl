@@ -130,7 +130,7 @@ function evaluate(p::SACPolicy, state)
     return tanh.(z), logp_π
 end
 
-function RLBase.update!(p::SACPolicy, traj::CircularCompactSARTSATrajectory)
+function RLBase.update!(p::SACPolicy, traj::Trajectory)
     length(traj[:terminal]) > p.update_after || return
     p.step % p.update_every == 0 || return
 

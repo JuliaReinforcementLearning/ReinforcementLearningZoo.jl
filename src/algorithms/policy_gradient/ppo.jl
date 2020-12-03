@@ -1,4 +1,4 @@
-include("ppo_trajectory.jl")
+# include("ppo_trajectory.jl")
 
 using Random
 using Distributions: Categorical, Normal, logpdf
@@ -109,7 +109,7 @@ end
 (p::PPOPolicy)(env::MultiThreadEnv) = rand.(p.rng, get_prob(p, env))
 (p::PPOPolicy)(env::AbstractEnv) = rand(p.rng, get_prob(p, env))
 
-function RLBase.update!(p::PPOPolicy, t::PPOTrajectory)
+function RLBase.update!(p::PPOPolicy, t::Trajectory)
     isfull(t) || return
 
     states = t[:state]
@@ -201,7 +201,7 @@ function RLBase.update!(p::PPOPolicy, t::PPOTrajectory)
 end
 
 function (agent::Agent{<:Union{PPOPolicy,RandomStartPolicy{<:PPOPolicy}}})(
-    ::Training{PreActStage},
+    # ::Training{PreActStage},
     env::MultiThreadEnv,
 )
     state = get_state(env)

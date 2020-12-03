@@ -129,7 +129,7 @@ function (p::TD3Policy)(env)
     end
 end
 
-function RLBase.update!(p::TD3Policy, traj::CircularCompactSARTSATrajectory)
+function RLBase.update!(p::TD3Policy, traj::Trajectory)
     length(traj[:terminal]) > p.update_after || return
     p.step % p.update_every == 0 || return
 

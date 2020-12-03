@@ -5,4 +5,4 @@ using ReinforcementLearningCore
 using AbstractTrees
 using TensorBoardLogger: TBLogger
 
-AbstractTrees.children(t::StructTree{T}) where {T<:Union{TBLogger}} = ()
+RLCore.is_expand(::TBLogger) = false
