@@ -56,7 +56,7 @@ function RLCore.Experiment(
             terminal = Vector{Bool} => (N_ENV,),
         ),
     )
-    stop_condition = StopAfterStep(100_000)
+    stop_condition = StopAfterStep(50_000)
     total_reward_per_episode = TotalBatchRewardPerEpisode(N_ENV)
     time_per_step = TimePerStep()
     hook = ComposedHook(

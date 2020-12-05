@@ -77,10 +77,6 @@ function RLCore.Experiment(
                     0
             end
         end,
-        DoEveryNStep(10000) do t, agent, env
-            RLCore.save(save_dir, agent)
-            BSON.@save joinpath(save_dir, "stats.bson") total_reward_per_episode time_per_step
-        end,
     )
 
     description = """
@@ -88,5 +84,5 @@ function RLCore.Experiment(
     The testing environment is CartPoleEnv.
     """
 
-    Experiment(agent, env, stop_condition, hook, Description(description, save_dir))
+    Experiment(agent, env, stop_condition, hook, description)
 end

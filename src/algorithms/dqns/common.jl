@@ -25,7 +25,7 @@ function RLBase.update!(learner::Union{DQNLearner, PERLearners}, t::AbstractTraj
     end
 end
 
-function RLBase.update!(trajectory::PrioritizedTrajectory, p::QBasedPolicy{<:PERLearners}, env::AbstractEnv, ::PostActStage, ::AbstractMode)
+function RLBase.update!(trajectory::PrioritizedTrajectory, p::QBasedPolicy{<:PERLearners}, env::AbstractEnv, ::PostActStage)
     push!(trajectory[:reward], get_reward(env))
     push!(trajectory[:terminal], get_terminal(env))
     push!(trajectory[:priority], p.learner.default_priority)

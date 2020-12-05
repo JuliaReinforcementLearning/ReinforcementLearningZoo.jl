@@ -1,10 +1,55 @@
-# include("ppo_trajectory.jl")
+export PPOPolicy, PPOTrajectory, MaskedPPOTrajectory
 
 using Random
 using Distributions: Categorical, Normal, logpdf
 using StructArrays
+using CircularArrayBuffers
 
-export PPOPolicy
+const PPOTrajectory = Trajectory{
+    <:NamedTuple{
+        (:action_log_prob, SART...),
+        <:Tuple{
+            <:CircularArrayBuffer,
+            <:CircularArrayBuffer,
+            <:CircularArrayBuffer,
+            <:CircularArrayBuffer,
+            <:CircularArrayBuffer,
+        },
+    },
+}
+
+function PPOTrajectory(;capacity, action_log_prob,kwargs...)
+    merge(
+        CircularArrayTrajectory(;capacity=capacity+1, action_log_prob=action_log_prob),
+        CircularArraySARTTrajectory(;capacity=capacity, kwargs...)
+    )
+end
+
+const MaskedPPOTrajectory = Trajectory{
+    <:NamedTuple{
+        (:action_log_prob, SLART...),
+        <:Tuple{
+            <:CircularArrayBuffer,
+            <:CircularArrayBuffer,
+            <:CircularArrayBuffer,
+            <:CircularArrayBuffer,
+            <:CircularArrayBuffer,
+            <:CircularArrayBuffer,
+        },
+    },
+}
+
+function MaskedPPOTrajectory(;capacity, action_log_prob,kwargs...)
+    merge(
+        CircularArrayTrajectory(;capacity=capacity+1, action_log_prob=action_log_prob),
+        CircularArraySLARTTrajectory(;capacity=capacity, kwargs...)
+    )
+end
+
+function Base.length(t::Union{PPOTrajectory,MaskedPPOTrajectory})
+    x = t[:terminal]
+    size(x, ndims(x))
+end
 
 """
     PPOPolicy(;kwargs)
@@ -39,6 +84,8 @@ mutable struct PPOPolicy{A<:ActorCritic,D,R} <: AbstractPolicy
     critic_loss_weight::Float32
     entropy_loss_weight::Float32
     rng::R
+    update_freq::Int
+    update_step::Int
     # for logging
     norm::Matrix{Float32}
     actor_loss::Matrix{Float32}
@@ -49,6 +96,8 @@ end
 
 function PPOPolicy(;
     approximator,
+    update_freq,
+    update_step=0,
     γ = 0.99f0,
     λ = 0.95f0,
     clip_range = 0.2f0,
@@ -73,6 +122,8 @@ function PPOPolicy(;
         critic_loss_weight,
         entropy_loss_weight,
         rng,
+        update_freq,
+        update_step,
         zeros(Float32, n_microbatches, n_epochs),
         zeros(Float32, n_microbatches, n_epochs),
         zeros(Float32, n_microbatches, n_epochs),
@@ -82,7 +133,7 @@ function PPOPolicy(;
 end
 
 function RLBase.get_prob(
-    p::PPOPolicy{<:ActorCritic{<:NeuralNetworkApproximator{<:GaussianNetwork}},Normal},
+    p::PPOPolicy{<:ActorCritic{<:GaussianNetwork},Normal},
     state::AbstractArray,
 )
     p.approximator.actor(send_to_device(device(p.approximator), state)) |>
@@ -109,15 +160,22 @@ end
 (p::PPOPolicy)(env::MultiThreadEnv) = rand.(p.rng, get_prob(p, env))
 (p::PPOPolicy)(env::AbstractEnv) = rand(p.rng, get_prob(p, env))
 
-function RLBase.update!(p::PPOPolicy, t::Trajectory)
-    isfull(t) || return
+function RLBase.update!(p::PPOPolicy, t::Union{PPOTrajectory, MaskedPPOTrajectory})
+    length(t) == 0 && return  # in the first update, only state & action is inserted into trajectory
+    p.update_step += 1
+    if p.update_step % p.update_freq == 0
+        _update!(p, t)
+    end
+end
 
-    states = t[:state]
-    actions = t[:action]
-    action_log_probs = t[:action_log_prob]
+function _update!(p::PPOPolicy, t::AbstractTrajectory)
+    n = length(t)
+    states = select_last_dim(t[:state], 1:n)
+    actions = select_last_dim(t[:action], 1:n)
+    action_log_probs = select_last_dim(t[:action_log_prob], 1:n)
     rewards = t[:reward]
     terminals = t[:terminal]
-    states_plus = t[:full_state]
+    states_plus = t[:state]
 
     rng = p.rng
     AC = p.approximator
@@ -149,10 +207,10 @@ function RLBase.update!(p::PPOPolicy, t::Trajectory)
         for i in 1:n_microbatches
             inds = rand_inds[(i-1)*microbatch_size+1:i*microbatch_size]
             s = send_to_device(D, select_last_dim(states_flatten, inds))
-            if haskey(t, :legal_actions_mask)
+            if t isa MaskedPPOTrajectory
                 lam = send_to_device(
                     D,
-                    select_last_dim(flatten_batch(t[:legal_actions_mask]), inds),
+                    select_last_dim(flatten_batch(select_last_dim(t[:legal_actions_mask], 1:n)), inds),
                 )
             end
             a = vec(actions)[inds]
@@ -163,7 +221,7 @@ function RLBase.update!(p::PPOPolicy, t::Trajectory)
             ps = Flux.params(AC)
             gs = gradient(ps) do
                 v′ = AC.critic(s) |> vec
-                if AC.actor isa NeuralNetworkApproximator{<:GaussianNetwork}
+                if AC.actor isa GaussianNetwork
                     μ, σ = AC.actor(s)
                     log_p′ₐ = normlogpdf(μ, σ, a)
                     entropy_loss = mean((log(2.0f0π) + 1) / 2 .+ log.(σ))
@@ -200,12 +258,14 @@ function RLBase.update!(p::PPOPolicy, t::Trajectory)
     end
 end
 
-function (agent::Agent{<:Union{PPOPolicy,RandomStartPolicy{<:PPOPolicy}}})(
-    # ::Training{PreActStage},
+function RLBase.update!(
+    trajectory::Union{PPOTrajectory,MaskedPPOTrajectory},
+    policy::Union{PPOPolicy, RandomStartPolicy{<:PPOPolicy}},
     env::MultiThreadEnv,
+    ::Union{PreActStage, PostEpisodeStage},
 )
     state = get_state(env)
-    dist = get_prob(agent.policy, env)
+    dist = get_prob(policy, env)
 
     # currently RandomPolicy returns a Matrix instead of a (vector of) distribution.
     if dist isa Matrix{<:Number}
@@ -215,31 +275,23 @@ function (agent::Agent{<:Union{PPOPolicy,RandomStartPolicy{<:PPOPolicy}}})(
     end
 
     # !!! a little ugly
-    rng = if agent.policy isa PPOPolicy
-        agent.policy.rng
-    elseif agent.policy isa RandomStartPolicy
-        agent.policy.policy.rng
+    rng = if policy isa PPOPolicy
+        policy.rng
+    elseif policy isa RandomStartPolicy
+        policy.policy.rng
     end
 
     action = [rand(rng, d) for d in dist]
     action_log_prob = [logpdf(d, a) for (d, a) in zip(dist, action)]
     push!(
-        agent.trajectory;
+        trajectory;
         state = state,
         action = action,
         action_log_prob = action_log_prob,
     )
-    update!(agent.policy, agent.trajectory)
 
-    # the main difference is we'd like to flush the buffer after each update!
-    if isfull(agent.trajectory)
-        empty!(agent.trajectory)
-        push!(
-            agent.trajectory;
-            state = state,
-            action = action,
-            action_log_prob = action_log_prob,
-        )
+    if trajectory isa MaskedPPOTrajectory
+        push!(trajectory; legal_actions_mask=get_legal_actions_mask(env))
     end
 
     action

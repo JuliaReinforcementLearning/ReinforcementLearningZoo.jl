@@ -3,15 +3,15 @@ function RLCore.Experiment(
     ::Val{:BasicDQN},
     ::Val{:CartPole},
     ::Nothing;
-    save_dir = nothing,
     seed = 123,
+    save_dir = nothing,
 )
     if isnothing(save_dir)
         t = Dates.format(now(), "yyyy_mm_dd_HH_MM_SS")
         save_dir = joinpath(pwd(), "checkpoints", "JuliaRL_BasicDQN_CartPole_$(t)")
     end
-
-    lg = TBLogger(joinpath(save_dir, "tb_log"), min_level = Logging.Info)
+    log_dir = joinpath(save_dir, "tb_log")
+    lg = TBLogger(log_dir, min_level = Logging.Info)
     rng = StableRNG(seed)
 
     env = CartPoleEnv(; T = Float32, rng = rng)
@@ -45,7 +45,7 @@ function RLCore.Experiment(
         ),
     )
 
-    stop_condition = StopAfterStep(10000)
+    stop_condition = StopAfterStep(10_000)
 
     total_reward_per_episode = TotalRewardPerEpisode()
     time_per_step = TimePerStep()
@@ -68,6 +68,9 @@ function RLCore.Experiment(
     description = """
     This experiment uses three dense layers to approximate the Q value.
     The testing environment is CartPoleEnv.
+
+    You can view the runtime logs with `tensorboard --logdir $log_dir`.
+    Some useful statistics are stored in the `hook` field of this experiment.
     """
 
     Experiment(agent, env, stop_condition, hook, description)

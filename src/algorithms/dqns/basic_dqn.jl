@@ -66,7 +66,7 @@ end
 
 function RLBase.update!(learner::BasicDQNLearner, traj::AbstractTrajectory)
     if length(traj) >= learner.min_replay_history
-        batch = sample(learner.rng, traj, learner.sampler)
+        inds, batch = sample(learner.rng, traj, learner.sampler)
         update!(learner, batch)
     end
 end
@@ -78,6 +78,7 @@ function RLBase.update!(learner::BasicDQNLearner, batch::NamedTuple{SARTS})
     loss_func = learner.loss_func
 
     s, a, r, t, s′ = send_to_device(device(Q), batch)
+    a = CartesianIndex.(a, 1:length(a))
 
     gs = gradient(params(Q)) do
         q = Q(s)[a]

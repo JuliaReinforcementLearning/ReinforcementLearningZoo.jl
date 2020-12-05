@@ -67,7 +67,7 @@ function _update!(learner::A2CLearner, t::CircularArraySARTTrajectory)
     to_device = x -> send_to_device(device(AC), x)
 
     states = select_last_dim(t[:state], 1:n)
-    states_flattened = flatten_batch(states) |> to_device # (state_size..., n_thread * update_step)
+    states_flattened = flatten_batch(states) |> to_device # (state_size..., n_thread * update_freq)
 
     actions = select_last_dim(t[:action], 1:n)
     actions = flatten_batch(actions)

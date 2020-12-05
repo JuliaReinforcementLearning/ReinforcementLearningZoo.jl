@@ -32,7 +32,7 @@ mutable struct DDPGPolicy{
     critic_loss::Float32
 end
 
-Flux.functor(x::A2CLearner) = (ba = x.behavior_actor, bc=x.behavior_critic, ta=x.target_actor, tc=x.target_critic), y -> begin
+Flux.functor(x::DDPGPolicy) = (ba = x.behavior_actor, bc=x.behavior_critic, ta=x.target_actor, tc=x.target_critic), y -> begin
     x = @set x.behavior_actor = y.ba
     x = @set x.behavior_critic = y.bc
     x = @set x.target_actor = y.ta
@@ -119,7 +119,7 @@ end
 function RLBase.update!(p::DDPGPolicy, traj::CircularArraySARTTrajectory)
     length(traj) > p.update_after || return
     p.step % p.update_every == 0 || return
-    batch = sample(p.rng, traj, BatchSampler{SARTS}(p.batch_size))
+    inds, batch = sample(p.rng, traj, BatchSampler{SARTS}(p.batch_size))
     update!(p, batch)
 end
 
