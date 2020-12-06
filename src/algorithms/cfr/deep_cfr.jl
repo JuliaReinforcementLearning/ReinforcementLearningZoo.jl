@@ -1,5 +1,7 @@
 export DeepCFR
 
+using Statistics: mean
+
 """
     DeepCFR(;kwargs...)
 

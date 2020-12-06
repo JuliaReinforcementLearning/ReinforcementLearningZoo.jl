@@ -6,11 +6,9 @@ using Zygote: ignore
 using Flux
 using Flux: onehot, normalise
 using Flux.Losses: mse
-using Statistics: mean
 using StatsBase
-using StatsBase: sample, Weights
+using StatsBase: sample, Weights, mean
 using LinearAlgebra: dot
-using StatsBase: mean
 using MacroTools
 using Distributions: Categorical, Normal, logpdf
 using StructArrays

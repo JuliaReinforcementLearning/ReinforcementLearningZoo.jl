@@ -1,5 +1,7 @@
 export IQNLearner, ImplicitQuantileNet
 
+using Statistics: mean
+
 """
     ImplicitQuantileNet(;ψ, ϕ, header)
 
