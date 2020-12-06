@@ -192,7 +192,7 @@ function RLBase.update!(learner::RainbowLearner, batch::NamedTuple)
 
     update!(Q, gs)
 
-    updated_priorities
+    is_use_PER ? updated_priorities : nothing
 end
 
 @inline function select_best_probs(probs, q)
