@@ -1,7 +1,5 @@
 export PPOTrajectory, PPOActionMaskTrajectory
 
-using MacroTools
-
 const PPOTrajectory = CombinedTrajectory{
     <:SharedTrajectory{
         <:CircularArrayBuffer,

@@ -1,4 +1,19 @@
+using Random
+using Random: shuffle
+using CUDA
+using Zygote
 using Zygote: ignore
+using Flux
+using Flux: onehot, normalise
+using Flux.Losses: mse
+using Statistics: mean
+using StatsBase
+using StatsBase: sample, Weights
+using LinearAlgebra: dot
+using StatsBase: mean
+using MacroTools
+using Distributions: Categorical, Normal, logpdf
+using StructArrays
 
 include("dqns/dqns.jl")
 include("policy_gradient/policy_gradient.jl")

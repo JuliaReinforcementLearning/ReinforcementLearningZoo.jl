@@ -1,8 +1,5 @@
 export DQNLearner
 
-using Random
-using Flux
-
 """
     DQNLearner(;kwargs...)
 See paper: [Human-level control through deep reinforcement learning](https://www.nature.com/articles/nature14236)

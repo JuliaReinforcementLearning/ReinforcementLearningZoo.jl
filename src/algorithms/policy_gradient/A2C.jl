@@ -1,7 +1,5 @@
 export A2CLearner
 
-using Flux
-
 """
     A2CLearner(;kwargs...)
 
