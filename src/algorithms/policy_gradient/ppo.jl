@@ -169,14 +169,6 @@ function RLBase.update!(p::PPOPolicy, t::Union{PPOTrajectory, MaskedPPOTrajector
 end
 
 function _update!(p::PPOPolicy, t::AbstractTrajectory)
-    n = length(t)
-    states = select_last_dim(t[:state], 1:n)
-    actions = select_last_dim(t[:action], 1:n)
-    action_log_probs = select_last_dim(t[:action_log_prob], 1:n)
-    rewards = t[:reward]
-    terminals = t[:terminal]
-    states_plus = t[:state]
-
     rng = p.rng
     AC = p.approximator
     γ = p.γ
@@ -189,30 +181,34 @@ function _update!(p::PPOPolicy, t::AbstractTrajectory)
     w₃ = p.entropy_loss_weight
     D = device(AC)
 
-    n_envs, n_rollout = size(terminals)
+    n_envs, n_rollout = size(t[:terminal])
     @assert n_envs * n_rollout % n_microbatches == 0 "size mismatch"
     microbatch_size = n_envs * n_rollout ÷ n_microbatches
 
-    states_flatten = flatten_batch(states)
-    states_plus_flatten = flatten_batch(states_plus)
-    states_plus_values =
-        reshape(send_to_host(AC.critic(send_to_device(D, states_plus_flatten))), n_envs, :)
-    advantages =
-        generalized_advantage_estimation(rewards, states_plus_values, γ, λ; dims = 2)
+    n = length(t)
+    states_plus = send_to_device(D, t[:state])
+
+    states_flatten = flatten_batch(select_last_dim(states_plus, 1:n))
+    states_plus_values = reshape(send_to_host(AC.critic(flatten_batch(states_plus))), n_envs, :)
+    advantages = generalized_advantage_estimation(t[:reward], states_plus_values, γ, λ; dims = 2, terminal=t[:terminal])
     returns = advantages .+ select_last_dim(states_plus_values, 1:n_rollout)
+
+    actions = select_last_dim(t[:action], 1:n)
+    action_log_probs = select_last_dim(t[:action_log_prob], 1:n)
 
     # TODO: normalize advantage
     for epoch in 1:n_epochs
         rand_inds = shuffle!(rng, Vector(1:n_envs*n_rollout))
         for i in 1:n_microbatches
             inds = rand_inds[(i-1)*microbatch_size+1:i*microbatch_size]
-            s = send_to_device(D, select_last_dim(states_flatten, inds))
             if t isa MaskedPPOTrajectory
                 lam = send_to_device(
                     D,
                     select_last_dim(flatten_batch(select_last_dim(t[:legal_actions_mask], 1:n)), inds),
                 )
+                @error "TODO:"
             end
+            s = send_to_device(D, select_last_dim(states_flatten, inds))  # !!! performance critical
             a = vec(actions)[inds]
             r = send_to_device(D, vec(returns)[inds])
             log_p = send_to_device(D, vec(action_log_probs)[inds])
