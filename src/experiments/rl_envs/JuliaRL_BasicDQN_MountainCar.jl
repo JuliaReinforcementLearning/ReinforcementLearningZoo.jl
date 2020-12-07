@@ -70,5 +70,5 @@ function RLCore.Experiment(
     The testing environment is MountainCarEnv.
     """
 
-    Experiment(agent, env, stop_condition, hook, Description(description, save_dir))
+    Experiment(agent, env, stop_condition, hook, description)
 end
