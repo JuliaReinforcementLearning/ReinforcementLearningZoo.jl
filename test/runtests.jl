@@ -6,7 +6,7 @@ using ReinforcementLearningEnvironments
 using Flux
 using Statistics
 using Random
-using OpenSpiel
+#using OpenSpiel
 using StableRNGs
 
 function get_optimal_kuhn_policy(α = 0.2)
@@ -32,7 +32,7 @@ end
 
     @testset "training" begin
         mktempdir() do dir
-            for method in (:BasicDQN, :DQN, :PrioritizedDQN, :Rainbow, :IQN, :VPG, :FPN)
+            for method in (:BasicDQN, :FPN,:DQN, :PrioritizedDQN, :Rainbow, :IQN, :VPG)
                 res = run(Experiment(
                     Val(:JuliaRL),
                     Val(method),

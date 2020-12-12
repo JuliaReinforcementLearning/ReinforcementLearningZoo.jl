@@ -161,6 +161,7 @@ function (learner::FPNLearner)(env)
     tau_i = cumsum(softmax(learner.fpn_app(state); dims=1),dims=1)
     ze = zeros(Float32,1,size(tau_i,2))
     tau = cat(ze,tau_i,dims=1)
+    N = learner.N
     tau_hat = ones(Float32,N,size(tau,2))
     for i=1:N
         tau_hat[i,:]=(tau[i,:].+tau[i+1,:])./2
@@ -173,7 +174,7 @@ end
 
 embed(x, Nₑₘ) = cos.(Float32(π) .* (1:Nₑₘ) .* reshape(x, 1, :))
 
-function RLBase.update!(learner::IQNLearner, batch::NamedTuple)
+function RLBase.update!(learner::FPNLearner, batch::NamedTuple)
     Z = learner.approximator
     Zₜ = learner.target_approximator
     f = learner.fpn_app
