@@ -32,7 +32,7 @@ end
 
     @testset "training" begin
         mktempdir() do dir
-            for method in (:BasicDQN, :DQN, :PrioritizedDQN, :Rainbow, :IQN, :VPG)
+            for method in (:BasicDQN, :DQN, :PrioritizedDQN, :Rainbow, :IQN, :VPG, :FPN)
                 res = run(Experiment(
                     Val(:JuliaRL),
                     Val(method),
