@@ -21,7 +21,7 @@ feature ↱  ⨀   ↰ transformed embedding
        s        τ
 ```
 """
-Base.@kwdef struct FullyParametrizedNet{A,B,C}
+Base.@kwdef struct FullyParametrizedNet{A,B,C} <: AbstractApproximator
     ψ::A
     ϕ::B
     header::C
@@ -31,6 +31,7 @@ Flux.@functor FullyParametrizedNet
 
 
 function (net::FullyParametrizedNet)(s, emb)
+    #fpn = net.fpn_app(s)
     features = net.ψ(s)  # (n_feature, batch_size)
     emb_aligned = net.ϕ(emb)  # (n_feature, N * batch_size)
     merged =
@@ -41,13 +42,13 @@ function (net::FullyParametrizedNet)(s, emb)
 end
 
 """
-    IQNLearner(;kwargs)
+    FPNLearner(;kwargs)
 
 See [paper](https://arxiv.org/abs/1806.06923)
 
 # Keyworkd arugments
-- `approximator`, a [`ImplicitQuantileNet`](@ref)
-- `target_approximator`, a [`ImplicitQuantileNet`](@ref), must have the same structure as `approximator`
+- `approximator`, a [`FullyParametrizedNet`](@ref)
+- `target_approximator`, a [`FullyParametrizedNet`](@ref), must have the same structure as `approximator`
 - `κ = 1.0f0`,
 - `N = 32`,
 - `N′ = 32`,
@@ -66,10 +67,11 @@ See [paper](https://arxiv.org/abs/1806.06923)
 - `rng = Random.GLOBAL_RNG`,
 - `device_seed = nothing`,
 """
-mutable struct FPNLearner{A,T,B<:NeuralNetworkApproximator,R,D} <: AbstractLearner
+Base.@kwdef mutable struct FPNLearner{A,T,B<:NeuralNetworkApproximator,R,D} <: AbstractLearner
     approximator::A
     target_approximator::T
     fpn_app::B
+    sampler::NStepBatchSampler
     κ::Float32
     N::Int
     N′::Int
@@ -124,16 +126,19 @@ function FPNLearner(;
     β_priority = 0.5f0,
     rng = Random.GLOBAL_RNG,
     device_rng = CUDA.CURAND.RNG(),
+    traces = SARTS,
     loss = 0.0f0,
 )
-    copyto!(approximator, target_approximator)  # force sync
+    copyto!(approximator, target_approximator )  # force sync
     if device(approximator) !== device(device_rng)
         throw(ArgumentError("device of `approximator` doesn't match with the device of `device_rng`: $(device(approximator)) !== $(device_rng)"))
     end
+    sampler = NStepBatchSampler{traces}(;γ=γ, n=update_horizon,stack_size=stack_size,batch_size=batch_size)
     FPNLearner(
         approximator,
         target_approximator,
         fpn_app,
+        sampler,
         κ,
         N,
         N′,
@@ -173,6 +178,27 @@ function (learner::FPNLearner)(env)
 end
 
 embed(x, Nₑₘ) = cos.(Float32(π) .* (1:Nₑₘ) .* reshape(x, 1, :))
+
+function RLBase.update!(learner::FPNLearner, t::AbstractTrajectory)
+    length(t[:terminal]) < learner.min_replay_history && return
+
+    learner.update_step += 1
+
+    if learner.update_step % learner.target_update_freq == 0
+        copyto!(learner.target_approximator, learner.approximator)
+    end
+
+    learner.update_step % learner.update_freq == 0 || return
+
+    inds, batch = sample(learner.rng, t, learner.sampler)
+
+    if t isa PrioritizedTrajectory
+        priorities = update!(learner, batch)
+        t[:priority][inds] .= priorities
+    else
+        update!(learner,batch)
+    end
+end
 
 function RLBase.update!(learner::FPNLearner, batch::NamedTuple)
     Z = learner.approximator
@@ -252,8 +278,7 @@ function RLBase.update!(learner::FPNLearner, batch::NamedTuple)
         weights = 1.0f0 ./ ((batch.priorities .+ 1f-10) .^ β)
         weights ./= maximum(weights)
         weights = send_to_device(D, weights)
-    end
-    #2 .*q_t .-  
+    end 
     gs1 = Zygote.gradient(Flux.params(f)) do 
         z1 = flatten_batch(Z(s, tau_em))
         z2 = flatten_batch(Z(s, τₑₘ))
