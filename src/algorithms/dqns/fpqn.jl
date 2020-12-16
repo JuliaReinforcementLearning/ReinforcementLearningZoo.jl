@@ -211,11 +211,9 @@ function RLBase.update!(learner::FPNLearner, batch::NamedTuple)
     β = learner.β_priority
     batch_size = learner.batch_size
 
+    #D = device(Z)
     D = device(Z)
-    s, r, t, s′ = map(
-        x -> send_to_device(D, x),
-        (batch.states, batch.rewards, batch.terminals, batch.next_states),
-    )
+    s, r, t, s′ = (send_to_device(D, batch[x]) for x in (:state, :reward, :terminal, :next_state))
 
     tau_i_p = cumsum(softmax(f(s′); dims=1),dims=1)
     ze_p = zeros(Float32,1,batch_size)
@@ -228,35 +226,40 @@ function RLBase.update!(learner::FPNLearner, batch::NamedTuple)
     τₑₘ′ = embed(τ′, Nₑₘ)
     zₜ = Zₜ(s′, τₑₘ′)
     #z = reshape(zₜ,size(zₜ,1),N+1,batch_size)
-    avg_zₜ = zeros(Float32,size(zₜ,1),1,batch_size)
+    #avg_zₜ = zeros(Float32,size(zₜ,1),1,batch_size)
     p = zeros(Float32,1,batch_size)
     #tau_pf = tau_p[1:N,:]
     #for j=1:size(zₜ,1)
-    for k=1:size(avg_zₜ,1)
-        for j=1:batch_size
-            c = 0
-            for i=1:N
-                c = c .+ (tau_p[i+1,j]-tau_p[i,j]).*zₜ[k,i,j]
-            end
-            avg_zₜ[k,1,j] = c 
-        end
+    #for k=1:size(avg_zₜ,1)
+        #for j=1:batch_size
+            #c = 0
+            #for i=1:N
+                #c = c .+ (tau_p[i+1,j]-tau_p[i,j]).*zₜ[k,i,j]
+            #end
+            #avg_zₜ[k,1,j] = c 
+        #end
+    #end
+    for i=1:N
+        zₜ[:,i,:] = reshape((tau_p[i+1,:].-tau_p[i,:]),1,1,:) .*zₜ[:,i,:]
     end
+    avg_zₜ = sum(zₜ,dims=2)
+
     aₜ = argmax(avg_zₜ, dims = 1)
     aₜ = aₜ .+ typeof(aₜ)(CartesianIndices((0, 0:N-1, 0)))
     qₜ = reshape(zₜ[aₜ], :, batch_size)
-    target = reshape(r, 1, batch_size) .+ learner.γ * reshape(1 .- t, 1, batch_size) .* qₜ
+    target = reshape(r, 1, batch_size) .+ learner.sampler.γ * reshape(1 .- t, 1, batch_size) .* qₜ
          
 
         #mean(zₜ, dims = 2)
 
-    if !isnothing(batch.next_legal_actions_mask)
+    if haskey(batch, :next_legal_actions_mask)
         masked_value = fill(typemin(Float32), size(batch.next_legal_actions_mask))
         masked_value[batch.next_legal_actions_mask] .= 0
         avg_zₜ .+= send_to_device(D, masked_value)
     end
      # reshape to allow broadcast
 
-    tau_i = cumsum(softmax(f(s), dims=1),dims=1)
+    tau_i = cumsum(softmax(f(s); dims=1),dims=1)
     ze = zeros(Float32,1,batch_size)
     tau = cat(ze,tau_i,dims=1)
     tau_hat = ones(Float32,N,size(tau,2))
@@ -272,7 +275,7 @@ function RLBase.update!(learner::FPNLearner, batch::NamedTuple)
     #q_t = reshape(q_t_i,:,batch_size)
     #z = reshape(zₜ,size(zₜ,1),N+1,batch_size)
 
-    is_use_PER = !isnothing(batch.priorities)  # is use Prioritized Experience Replay
+    is_use_PER = haskey(batch.priorities)  # is use Prioritized Experience Replay
     if is_use_PER
         updated_priorities = Vector{Float32}(undef, batch_size)
         weights = 1.0f0 ./ ((batch.priorities .+ 1f-10) .^ β)
