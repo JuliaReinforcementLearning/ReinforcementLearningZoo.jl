@@ -80,7 +80,7 @@ function MultiThreadEnv(envs::Vector{<:AbstractEnv})
     MultiThreadEnv(envs, s_batch, r_batch, t_batch, A_batch, S_batch, m_batch)
 end
 
-@forward MultiThreadEnv.envs Base.getindex, Base.length, Base.iterate
+MacroTools.@forward MultiThreadEnv.envs Base.getindex, Base.length, Base.iterate
 
 function (env::MultiThreadEnv)(actions)
     @sync for i in 1:length(env)
