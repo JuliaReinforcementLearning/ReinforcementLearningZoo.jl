@@ -7,7 +7,7 @@ Wrap multiple instances of the same environment type into one environment.
 Each environment will run in parallel by leveraging `Threads.@spawn`.
 So remember to set the environment variable `JULIA_NUM_THREADS`!
 """
-struct MultiThreadEnv{E,S,R,AS,SS,L} <: AbstractEnvWrapper
+struct MultiThreadEnv{E,S,R,AS,SS,L} <: AbstractEnv
     envs::Vector{E}
     states::S
     rewards::R
