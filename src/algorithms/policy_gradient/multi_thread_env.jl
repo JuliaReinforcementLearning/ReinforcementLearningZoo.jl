@@ -1,5 +1,7 @@
 export MultiThreadEnv
 
+using Base.Threads:@spawn
+
 """
     MultiThreadEnv(envs::Vector{<:AbstractEnv})
 
