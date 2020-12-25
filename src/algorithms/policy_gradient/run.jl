@@ -6,8 +6,6 @@ Many policy gradient based algorithms require that the `env` is a
 pipeline is different from the default one in `RLCore`.
 """
 function RLCore._run(
-    ::Sequential,
-    ::SingleAgent,
     policy::AbstractPolicy,
     env::MultiThreadEnv,
     stop_condition,
