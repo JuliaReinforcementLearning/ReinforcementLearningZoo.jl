@@ -92,13 +92,23 @@ function RLBase.update!(trajectory::ElasticSARTTrajectory, policy::VPGPolicy, en
     push!(trajectory[:action], action)
 end
 
-function RLBase.update!(t::ElasticSARTTrajectory, ::VPGPolicy, ::AbstractEnv, ::PreEpisodeStage)
+function RLBase.update!(
+    t::ElasticSARTTrajectory,
+    ::VPGPolicy,
+    ::AbstractEnv,
+    ::PreEpisodeStage,
+)
     empty!(t)
 end
 
 RLBase.update!(::VPGPolicy, ::ElasticSARTTrajectory, ::AbstractEnv, ::PreActStage) = nothing
 
-function RLBase.update!(π::VPGPolicy, traj::ElasticSARTTrajectory, ::AbstractEnv, ::PostEpisodeStage)
+function RLBase.update!(
+    π::VPGPolicy,
+    traj::ElasticSARTTrajectory,
+    ::AbstractEnv,
+    ::PostEpisodeStage,
+)
     model = π.approximator
     to_dev(x) = send_to_device(device(model), x)
 
