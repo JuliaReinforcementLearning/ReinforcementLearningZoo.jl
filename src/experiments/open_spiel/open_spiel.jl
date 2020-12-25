@@ -2,7 +2,7 @@ using Random
 
 function RLCore.Experiment(::Val{:JuliaRL}, ::Val{:Minimax}, ::Val{:OpenSpiel}, game;)
     env = OpenSpielEnv(string(game))
-    agents = AgentManager(
+    agents = MultiAgentManager(
         NamedPolicy(0 => MinimaxPolicy()),
         NamedPolicy(1 => MinimaxPolicy()),
     )
