@@ -19,8 +19,7 @@ end
 
 (p::OutcomeSamplingMCCFRPolicy)(env::AbstractEnv) = p.behavior_policy(env)
 
-RLBase.prob(p::OutcomeSamplingMCCFRPolicy, env::AbstractEnv) =
-    prob(p.behavior_policy, env)
+RLBase.prob(p::OutcomeSamplingMCCFRPolicy, env::AbstractEnv) = prob(p.behavior_policy, env)
 
 RLBase.prob(p::OutcomeSamplingMCCFRPolicy, env::AbstractEnv, action) =
     prob(p.behavior_policy, env, action)
