@@ -10,7 +10,7 @@ RLCore.is_expand(::TBLogger) = false
 
 Inject some runtime info into the action
 """
-struct EnrichedAction{A,P}
+struct EnrichedAction{A,M}
     action::A
     meta::M
 end
