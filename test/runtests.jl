@@ -30,73 +30,73 @@ end
 
 @testset "ReinforcementLearningZoo.jl" begin
 
-    # @testset "training" begin
-    #     mktempdir() do dir
-    #         for method in (:BasicDQN, :DQN, :PrioritizedDQN, :Rainbow, :IQN, :VPG)
-    #             res = run(Experiment(
-    #                 Val(:JuliaRL),
-    #                 Val(method),
-    #                 Val(:CartPole),
-    #                 nothing;
-    #                 save_dir = joinpath(dir, "CartPole", string(method)),
-    #             ))
-    #             @info "stats for $method" avg_reward = mean(res.hook[1].rewards) avg_fps =
-    #                 1 / mean(res.hook[2].times)
-    #         end
+    @testset "training" begin
+        mktempdir() do dir
+            for method in (:BasicDQN, :DQN, :PrioritizedDQN, :Rainbow, :IQN, :VPG)
+                res = run(Experiment(
+                    Val(:JuliaRL),
+                    Val(method),
+                    Val(:CartPole),
+                    nothing;
+                    save_dir = joinpath(dir, "CartPole", string(method)),
+                ))
+                @info "stats for $method" avg_reward = mean(res.hook[1].rewards) avg_fps =
+                    1 / mean(res.hook[2].times)
+            end
 
-    #         for method in (:BasicDQN, :DQN)
-    #             res = run(Experiment(
-    #                 Val(:JuliaRL),
-    #                 Val(method),
-    #                 Val(:MountainCar),
-    #                 nothing;
-    #                 save_dir = joinpath(dir, "MountainCar", string(method)),
-    #             ))
-    #             @info "stats for $method" avg_reward = mean(res.hook[1].rewards) avg_fps =
-    #                 1 / mean(res.hook[2].times)
-    #         end
+            for method in (:BasicDQN, :DQN)
+                res = run(Experiment(
+                    Val(:JuliaRL),
+                    Val(method),
+                    Val(:MountainCar),
+                    nothing;
+                    save_dir = joinpath(dir, "MountainCar", string(method)),
+                ))
+                @info "stats for $method" avg_reward = mean(res.hook[1].rewards) avg_fps =
+                    1 / mean(res.hook[2].times)
+            end
 
-    #         for method in (:A2C, :A2CGAE, :PPO, :MAC)
-    #             res = run(Experiment(
-    #                 Val(:JuliaRL),
-    #                 Val(method),
-    #                 Val(:CartPole),
-    #                 nothing;
-    #                 save_dir = joinpath(dir, "CartPole", string(method)),
-    #             ))
-    #             @info "stats for $method" avg_reward =
-    #                 mean(Iterators.flatten(res.hook[1].rewards))
-    #         end
+            for method in (:A2C, :A2CGAE, :PPO, :MAC)
+                res = run(Experiment(
+                    Val(:JuliaRL),
+                    Val(method),
+                    Val(:CartPole),
+                    nothing;
+                    save_dir = joinpath(dir, "CartPole", string(method)),
+                ))
+                @info "stats for $method" avg_reward =
+                    mean(Iterators.flatten(res.hook[1].rewards))
+            end
 
-    #         for method in (:DDPG, :SAC, :TD3)
-    #             res = run(Experiment(
-    #                 Val(:JuliaRL),
-    #                 Val(method),
-    #                 Val(:Pendulum),
-    #                 nothing;
-    #                 save_dir = joinpath(dir, "Pendulum", string(method)),
-    #             ))
-    #             @info "stats for $method" avg_reward =
-    #                 mean(Iterators.flatten(res.hook[1].rewards))
-    #         end
-    #     end
-    # end
+            for method in (:DDPG, :SAC, :TD3)
+                res = run(Experiment(
+                    Val(:JuliaRL),
+                    Val(method),
+                    Val(:Pendulum),
+                    nothing;
+                    save_dir = joinpath(dir, "Pendulum", string(method)),
+                ))
+                @info "stats for $method" avg_reward =
+                    mean(Iterators.flatten(res.hook[1].rewards))
+            end
+        end
+    end
 
-    # @testset "minimax" begin
-    #     e = E`JuliaRL_Minimax_OpenSpiel(tic_tac_toe)`
-    #     run(e)
-    #     @test e.hook[1][] == e.hook[0][] == [0.0]
-    # end
+    @testset "minimax" begin
+        e = E`JuliaRL_Minimax_OpenSpiel(tic_tac_toe)`
+        run(e)
+        @test e.hook[1][] == e.hook[0][] == [0.0]
+    end
 
-    # @testset "TabularCFR" begin
-    #     e = E`JuliaRL_TabularCFR_OpenSpiel(kuhn_poker)`
-    #     run(e)
+    @testset "TabularCFR" begin
+        e = E`JuliaRL_TabularCFR_OpenSpiel(kuhn_poker)`
+        run(e)
 
-    #     reset!(e.env)
-    #     expected_values = expected_policy_values(e.policy, e.env)
-    #     @test isapprox(expected_values[1], -1 / 18; atol = 0.001)
-    #     @test isapprox(expected_values[2], 1 / 18; atol = 0.001)
-    # end
+        reset!(e.env)
+        expected_values = expected_policy_values(e.policy, e.env)
+        @test isapprox(expected_values[1], -1 / 18; atol = 0.001)
+        @test isapprox(expected_values[2], 1 / 18; atol = 0.001)
+    end
 
     include("cfr/cfr.jl")
 end
