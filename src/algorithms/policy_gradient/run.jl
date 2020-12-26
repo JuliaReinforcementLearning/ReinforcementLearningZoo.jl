@@ -14,7 +14,8 @@ function RLCore._run(
 
     while true
         reset!(env)  # this is a soft reset!, only environments reached the end will get reset.
-        action = policy(PRE_ACT_STAGE, env)
+        action = policy(env)
+        policy(PRE_ACT_STAGE, env, action)
         hook(PRE_ACT_STAGE, policy, env, action)
 
         env(action)

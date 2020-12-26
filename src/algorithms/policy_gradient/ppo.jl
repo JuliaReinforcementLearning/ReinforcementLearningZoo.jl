@@ -162,13 +162,13 @@ end
 (p::PPOPolicy)(env::AbstractEnv) = rand(p.rng, prob(p, env))
 
 function (agent::Agent{<:PPOPolicy})(env::AbstractEnv)
-    dist = prob(p, env)
+    dist = prob(agent.policy, env)
     a = rand(agent.policy.rng, dist)
     EnrichedAction(a; action_log_prob=logpdf(dist, a))
 end
 
 function (agent::Agent{<:PPOPolicy})(env::MultiThreadEnv)
-    dist = prob(p, env)
+    dist = prob(agent.policy, env)
     action = rand.(agent.policy.rng, dist)
     EnrichedAction(action; action_log_prob=logpdf.(dist, action))
 end
