@@ -5,9 +5,9 @@ using Distributions:pdf
 
 Base.@kwdef struct TDLearner{A} <: AbstractLearner
     approximator::A
-    γ::Float64
+    γ::Float64 = 1.0
     method::Symbol
-    n::Int
+    n::Int = 0
 end
 
 (L::TDLearner)(env::AbstractEnv) = L.approximator(state(env))
@@ -44,7 +44,7 @@ end
 
 function RLBase.update!(
     t::AbstractTrajectory,
-    ::Union{QBasedPolicy{<:TDLearner}, NamedPolicy{<:QBasedPolicy{<:TDLearner}}},
+    ::Union{QBasedPolicy{<:TDLearner}, NamedPolicy{<:QBasedPolicy{<:TDLearner}}, VBasedPolicy{<:TDLearner}},
     ::AbstractEnv,
     ::PreEpisodeStage
 )
@@ -126,5 +126,41 @@ function _update!(
         s, a, s′ = S[end-n-1], A[end-n-1], S[end]
         G = discount_rewards_reduced(@view(R[end-n:end]), γ) + γ^(n+1) * maximum(Q(s′))
         update!(Q, (s,a) => Q(s ,a) - G)
+    end
+end
+
+function _update!(
+    L::TDLearner,
+    ::TabularVApproximator,
+    ::Val{:SRS},
+    t::Trajectory,
+    ::PostEpisodeStage
+)
+    S, R = t[:state], t[:reward]
+    n, γ, V = L.n, L.γ, L.approximator
+    G = 0.
+    for i in 1:min(n+1, length(R))
+        G = R[end-i+1] + γ * G
+        s = S[end-i]
+        update!(V, s => V(s) - G)
+    end
+end
+
+function _update!(
+    L::TDLearner,
+    ::TabularVApproximator,
+    ::Val{:SRS},
+    t::AbstractTrajectory,
+    ::PreActStage
+)
+    S = t[:state]
+    R = t[:reward]
+
+    n, γ, V = L.n, L.γ, L.approximator
+
+    if length(R) >= n+1
+        s, s′ = S[end-n-1], S[end]
+        G = discount_rewards_reduced(@view(R[end-n:end]), γ) + γ^(n+1) * V(s′)
+        update!(V, s => V(s) - G)
     end
 end
