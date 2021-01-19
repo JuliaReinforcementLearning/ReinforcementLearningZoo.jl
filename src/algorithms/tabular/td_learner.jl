@@ -164,3 +164,70 @@ function _update!(
         update!(V, s => V(s) - G)
     end
 end
+
+#####
+# DynaAgent
+#####
+
+function RLBase.update!(
+    p::QBasedPolicy{<:TDLearner},
+    m::Union{ExperienceBasedSamplingModel, TimeBasedSamplingModel},
+    ::AbstractTrajectory,
+    env::AbstractEnv,
+    ::Union{PreActStage, PostEpisodeStage}
+)
+    if p.learner.method == :SARS
+        transition = sample(m)
+        if !isnothing(transition)
+            s, a, r, t, s′ = transition
+            traj = VectorSARTTrajectory()
+            push!(traj; state=s, action=a, reward=r, terminal=t)
+            push!(traj; state=s′, action=a)  # here a is a dummy one
+            update!(p.learner, traj, env, t ? POST_EPISODE_STAGE : PRE_ACT_STAGE)
+        end
+    else
+        @error "unsupported method $(p.learner.method)"
+    end
+end
+
+function RLBase.update!(
+    p::QBasedPolicy{<:TDLearner},
+    m::PrioritizedSweepingSamplingModel,
+    ::AbstractTrajectory,
+    env::AbstractEnv,
+    ::Union{PreActStage, PostEpisodeStage}
+)
+    if p.learner.method == :SARS
+        transition = sample(m)
+        if !isnothing(transition)
+            s, a, r, t, s′ = transition
+            traj = VectorSARTTrajectory()
+            push!(traj; state=s, action=a, reward=r, terminal=t)
+            push!(traj; state=s′, action=a)  # here a is a dummy one
+            update!(p.learner, traj, env, t ? POST_EPISODE_STAGE : PRE_ACT_STAGE)
+            
+            # update priority
+            for (s̄, ā, r̄, d̄) in m.predecessors[s]
+                P = RLBase.priority(p.learner, (s̄, ā, r̄, d̄, s))
+                if P ≥ m.θ
+                    m.PQueue[(s̄, ā)] = P
+                end
+            end
+        end
+    else
+        @error "unsupported method $(p.learner.method)"
+    end
+end
+
+function RLBase.priority(L::TDLearner, transition::Tuple)
+    if L.method == :SARS
+        s, a, r, d, s′ = transition
+        γ, Q = L.γ, L.approximator
+        Δ = d ? (r - Q(s, a)) : (r + γ^(L.n + 1) * maximum(Q(s′)) - Q(s, a))
+        Δ = [Δ]  # must be broadcastable in Flux.Optimise
+        Flux.Optimise.apply!(Q.optimizer, (s, a), Δ)
+        abs(Δ[])
+    else
+        @error "unsupported method"
+    end
+end

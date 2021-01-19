@@ -1,3 +1,4 @@
+include("dyna_agents/dyna_agents.jl")
 include("monte_carlo_learner.jl")
 include("td_learner.jl")
 include("gradient_bandit_learner.jl")
