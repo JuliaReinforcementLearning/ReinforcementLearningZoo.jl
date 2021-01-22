@@ -1,3 +1,4 @@
+include("linear_approximator.jl")
 include("dyna_agents/dyna_agents.jl")
 include("monte_carlo_learner.jl")
 include("td_learner.jl")

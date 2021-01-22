@@ -69,7 +69,7 @@ end
 
 function _update!(
     ::FirstVisit,
-    ::TabularVApproximator,
+    ::Union{TabularVApproximator,LinearVApproximator},
     ::NoSampling,
     L::MonteCarloLearner,
     t::AbstractTrajectory
@@ -90,7 +90,7 @@ end
 
 function _update!(
     ::EveryVisit,
-    ::TabularVApproximator,
+    ::Union{TabularVApproximator,LinearVApproximator},
     ::NoSampling,
     L::MonteCarloLearner,
     t::AbstractTrajectory,
@@ -144,7 +144,7 @@ end
 
 function _update!(
     ::FirstVisit,
-    ::Tuple{<:TabularVApproximator, <:TabularVApproximator},
+    ::Tuple{<:Union{TabularVApproximator,LinearVApproximator}, <:Union{TabularVApproximator,LinearVApproximator}},
     ::OrdinaryImportanceSampling,
     L::MonteCarloLearner,
     t::AbstractTrajectory,
