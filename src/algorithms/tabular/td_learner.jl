@@ -55,7 +55,7 @@ end
 
 function _update!(
     L::TDLearner,
-    ::TabularQApproximator,
+    ::Union{TabularQApproximator, LinearQApproximator},
     ::Union{Val{:SARSA}, Val{:ExpectedSARSA}, Val{:SARS}},
     t::Trajectory,
     ::PostEpisodeStage
@@ -72,7 +72,7 @@ end
 
 function _update!(
     L::TDLearner,
-    ::TabularQApproximator,
+    ::Union{TabularQApproximator,LinearQApproximator},
     ::Val{:SARSA},
     t::Trajectory,
     ::PreActStage
@@ -111,7 +111,7 @@ end
 
 function _update!(
     L::TDLearner,
-    ::TabularQApproximator,
+    ::Union{TabularQApproximator, LinearQApproximator},
     ::Val{:SARS},
     t::AbstractTrajectory,
     ::PreActStage
@@ -131,7 +131,7 @@ end
 
 function _update!(
     L::TDLearner,
-    ::TabularVApproximator,
+    ::Union{TabularVApproximator, LinearVApproximator},
     ::Val{:SRS},
     t::Trajectory,
     ::PostEpisodeStage
@@ -139,16 +139,20 @@ function _update!(
     S, R = t[:state], t[:reward]
     n, γ, V = L.n, L.γ, L.approximator
     G = 0.
+    w = 1.0
     for i in 1:min(n+1, length(R))
         G = R[end-i+1] + γ * G
         s = S[end-i]
-        update!(V, s => V(s) - G)
+        if haskey(t, :weight)
+            w *= t[:weight][end-i]
+        end
+        update!(V, s => w * (V(s) - G))
     end
 end
 
 function _update!(
     L::TDLearner,
-    ::TabularVApproximator,
+    ::Union{TabularVApproximator, LinearVApproximator},
     ::Val{:SRS},
     t::AbstractTrajectory,
     ::PreActStage
@@ -157,11 +161,16 @@ function _update!(
     R = t[:reward]
 
     n, γ, V = L.n, L.γ, L.approximator
-
     if length(R) >= n+1
         s, s′ = S[end-n-1], S[end]
         G = discount_rewards_reduced(@view(R[end-n:end]), γ) + γ^(n+1) * V(s′)
-        update!(V, s => V(s) - G)
+        if haskey(t, :weight)
+            W = t[:weight]
+            @views w = reduce(*, W[end-n-1:end-1])
+        else
+            w = 1.0
+        end
+        update!(V, s => w * (V(s) - G))
     end
 end
 
@@ -230,4 +239,56 @@ function RLBase.priority(L::TDLearner, transition::Tuple)
     else
         @error "unsupported method"
     end
+end
+
+#####
+# TDλReturnLearner
+#####
+
+export TDλReturnLearner
+
+Base.@kwdef struct TDλReturnLearner{Tapp<:AbstractApproximator} <: AbstractLearner
+    approximator::Tapp
+    γ::Float64 = 1.0
+    λ::Float64
+end
+
+(L::TDλReturnLearner)(env::AbstractEnv) = L(state(env))
+(L::TDλReturnLearner)(s) = L.approximator(s)
+(L::TDλReturnLearner)(s, a) = L.approximator(s, a)
+
+function RLBase.update!(
+    L::TDλReturnLearner,
+    t::AbstractTrajectory,
+    ::AbstractEnv,
+    ::PostEpisodeStage
+)
+    λ, γ, V = L.λ, L.γ, L.approximator
+    R = t[:reward]
+    S = @view t[:state][1:end-1]
+    S′ = @view t[:state][2:end]
+    T = length(R)
+    for t = 1:T
+        G = 0.0
+        for n = 1:(T-t)
+            G += λ^(n - 1) *
+                (discount_rewards_reduced(@view(R[t:t+n-1]), γ) +
+                γ^n * V(S′[t+n-1]))
+        end
+        G *= 1 - λ
+        G += λ^(T - t) *
+            (discount_rewards_reduced(@view(R[t:T]), γ) +
+            γ^(T - t + 1) * V(S′[T]))
+        sₜ = S[t]
+        update!(V, sₜ => V(sₜ) - G)
+    end
+end
+
+function RLBase.update!(
+    t::AbstractTrajectory,
+    ::VBasedPolicy{<:TDλReturnLearner},
+    ::AbstractEnv,
+    ::PreEpisodeStage
+)
+    empty!(t)
 end
