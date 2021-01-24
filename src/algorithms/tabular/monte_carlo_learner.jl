@@ -53,10 +53,22 @@ function RLBase.update!(p::VBasedPolicy{<:MonteCarloLearner}, t::AbstractTraject
     update!(p.learner, t)
 end
 
+function RLBase.update!(
+    L::MonteCarloLearner,
+    t::AbstractTrajectory,
+    e::AbstractEnv,
+    s::PostEpisodeStage
+)
+    update!(L, t)
+end
+
 "Empty the trajectory at the end of an episode"
 function RLBase.update!(
     t::AbstractTrajectory,
-    ::Union{VBasedPolicy{<:MonteCarloLearner}, NamedPolicy{<:VBasedPolicy{<:MonteCarloLearner}}},
+    ::Union{
+        VBasedPolicy{<:MonteCarloLearner},
+        QBasedPolicy{<:MonteCarloLearner},
+        NamedPolicy{<:VBasedPolicy{<:MonteCarloLearner}}},
     ::AbstractEnv,
     ::PreEpisodeStage
 )
@@ -76,7 +88,7 @@ function _update!(
 )
     S, R = t[:state], t[:reward]
     V, G, γ = L.approximator, 0.0, L.γ
-    state_counts = countmap(S)
+    state_counts = countmap(@view(S[1:end-1]))
     for i in length(R):-1:1
         s, r = S[i], R[i]
         G = γ * G + r
@@ -114,6 +126,7 @@ function _update!(
     S, A, R = t[:state], t[:action], t[:reward]
     γ, Q, G = L.γ, L.approximator, 0.
     for i in length(R):-1:1
+        s, a, r = S[i], A[i], R[i]
         G = γ * G + R[i]
         update!(Q, (s, a) => (Q(s, a) - G))
     end
@@ -128,7 +141,7 @@ function _update!(
 )
     S, A, R = t[:state], t[:action], t[:reward]
     γ, Q, G = L.γ, L.approximator, 0.
-    seen_pairs = countmap(zip(S, A))
+    seen_pairs = countmap(zip(@view(S[1:end-1]), @view(A[1:end-1])))
 
     for i = length(R):-1:1
         s, a, r = S[i], A[i], R[i]
@@ -149,17 +162,18 @@ function _update!(
     L::MonteCarloLearner,
     t::AbstractTrajectory,
 )
-    S, R, W = t[:state],  t[:reward], t[:weight],
-    (V, G), g, γ,ρ = L.approximator, 0.0, L.γ, 1.0
-    seen_states = countmap(S)
+    S, R, W = t[:state], t[:reward], t[:weight]
+    (V, G), g, γ, ρ = L.approximator, 0.0, L.γ, 1.0
+    seen_states = countmap(@view(S[1:end-1]))
 
+    # @info "debug" S R W seen_states G V t[:action]
     for i = length(R):-1:1
         s, r = S[i], R[i]
         g = γ * g + r
         ρ *= W[i]
         if seen_states[s] == 1  # first visit
-            update!(G, s => ρ * g)
-            update!(V, s => G[s] - V(S))
+            update!(G, s => G(s) - ρ * g)
+            update!(V, s => V(s) - G(s))
         else
             seen_states[s] -= 1
         end
@@ -173,19 +187,19 @@ function _update!(
     L::MonteCarloLearner,
     t::AbstractTrajectory
 )
-    S, R, W = t[:state],  t[:reward], t[:weight],
+    S, R, W = t[:state],  t[:reward], t[:weight]
     (V, G, Ρ), g, γ,ρ = L.approximator, 0.0, L.γ, 1.0
-    seen_states = countmap(S)
+    seen_states = countmap(@view(S[1:end-1]))
 
     for i = length(R):-1:1
         s, r = S[i], rewards[i]
         g = γ * g + r
         ρ *= W[t]
         if seen_states[S] == 1  # first visit
-            update!(G, s => ρ * g)
-            update!(Ρ, s => ρ)
-            val = Ρ[s] == 0 ? 0 : G[s] / Ρ[s]
-            update!(V, s => val - V(s))
+            update!(G, s => G(s) - ρ * g)
+            update!(Ρ, s => Ρ(s) - ρ)
+            val = Ρ(s) == 0 ? 0 : G(s) / Ρ(s)
+            update!(V, s => V(s) - val)
         else
             seen_states[s] -= 1
         end
