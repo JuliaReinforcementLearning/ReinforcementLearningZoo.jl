@@ -31,7 +31,11 @@ function RLBase.update!(
 end
 
 
-function RLBase.update!(L::TDLearner, t::AbstractTrajectory, ::AbstractEnv, s::Union{PreActStage, PostEpisodeStage})
+function RLBase.update!(L::TDLearner, t::AbstractTrajectory, ::AbstractEnv, s::PreActStage)
+    _update!(L, L.approximator, Val(L.method), t, s)
+end
+
+function RLBase.update!(L::TDLearner, t::AbstractTrajectory, ::AbstractEnv, s::PostEpisodeStage)
     _update!(L, L.approximator, Val(L.method), t, s)
 end
 
@@ -256,6 +260,14 @@ end
 (L::TDλReturnLearner)(env::AbstractEnv) = L(state(env))
 (L::TDλReturnLearner)(s) = L.approximator(s)
 (L::TDλReturnLearner)(s, a) = L.approximator(s, a)
+
+function RLBase.update!(
+    L::TDλReturnLearner,
+    t::AbstractTrajectory,
+    ::AbstractEnv,
+    ::PreActStage
+)
+end
 
 function RLBase.update!(
     L::TDλReturnLearner,

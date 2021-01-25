@@ -10,6 +10,9 @@ end
 (learner::GradientBanditLearner)(s::Int) = s |> learner.approximator |> softmax
 (learner::GradientBanditLearner)(env::AbstractEnv) = learner(state(env))
 
+function RLBase.update!(L::GradientBanditLearner, t::AbstractTrajectory, ::AbstractEnv, ::PreActStage)
+end
+
 function RLBase.update!(L::GradientBanditLearner, t::AbstractTrajectory, ::AbstractEnv, ::PostActStage)
     A = L.approximator
     s, a, r = t[:state][end], t[:action][end], t[:reward][end]
