@@ -23,7 +23,7 @@ end
 
 mutable struct TabularCFRPolicy{S,T,R<:AbstractRNG} <: AbstractCFRPolicy
     nodes::Dict{S,InfoStateNode}
-    behavior_policy::QBasedPolicy{TabularRandomPolicy{S,T},WeightedExplorer{true,R}}
+    behavior_policy::TabularRandomPolicy{S,T,R}
     is_reset_neg_regrets::Bool
     is_linear_averaging::Bool
     weighted_averaging_delay::Int
