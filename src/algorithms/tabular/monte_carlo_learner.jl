@@ -192,10 +192,10 @@ function _update!(
     seen_states = countmap(@view(S[1:end-1]))
 
     for i = length(R):-1:1
-        s, r = S[i], rewards[i]
+        s, r = S[i], R[i]
         g = γ * g + r
-        ρ *= W[t]
-        if seen_states[S] == 1  # first visit
+        ρ *= W[i]
+        if seen_states[s] == 1  # first visit
             update!(G, s => G(s) - ρ * g)
             update!(Ρ, s => Ρ(s) - ρ)
             val = Ρ(s) == 0 ? 0 : G(s) / Ρ(s)

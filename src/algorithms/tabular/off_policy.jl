@@ -26,13 +26,14 @@ function RLBase.update!(
     t::VectorWSARTTrajectory,
     p::OffPolicy,
     env::AbstractEnv,
-    s::PreActStage,
+    ::PreActStage,
     a
 )
-    push!(t[:state], state(env))
+    s = state(env)
+    push!(t[:state], s)
     push!(t[:action], a)
 
-    w = prob(p.π_target, s, a) / prob(p.π_behavior, s, a)
+    w = prob(p.π_target, env, a) / prob(p.π_behavior, env, a)
     push!(t[:weight], w)
 end
 
