@@ -1,6 +1,7 @@
 export BehaviorCloingPolicy
 
 # https://github.com/FluxML/Flux.jl/pull/1492
+# TODO: use OneHotMatrix with logitcrossentropy instread
 function logit_sparse_crossentropy(ŷ, y; agg=mean)
     agg(.-logsoftmax(ŷ)[CartesianIndex.(y, 1:length(y))])
 end
