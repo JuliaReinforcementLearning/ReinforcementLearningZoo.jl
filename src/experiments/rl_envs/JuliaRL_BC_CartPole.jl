@@ -12,6 +12,7 @@ function RLCore.Experiment(
     ::Val{:CartPole},
     ::Nothing;
     seed = 123,
+    save_dir = nothing,
 )
     rng = StableRNG(seed)
 
