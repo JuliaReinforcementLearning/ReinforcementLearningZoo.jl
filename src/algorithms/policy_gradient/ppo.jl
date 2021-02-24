@@ -227,8 +227,8 @@ function _update!(p::PPOPolicy, t::AbstractTrajectory)
     )
     returns = advantages .+ select_last_dim(states_plus_values, 1:n_rollout)
 
-    actions = select_last_dim(t[:action], 1:n)
-    action_log_probs = select_last_dim(t[:action_log_prob], 1:n)
+    actions_flatten = flatten_batch(select_last_dim(t[:action], 1:n))
+    action_log_probs_flatten = flatten_batch(select_last_dim(t[:action_log_prob], 1:n))
 
     # TODO: normalize advantage
     for epoch in 1:n_epochs
@@ -246,9 +246,9 @@ function _update!(p::PPOPolicy, t::AbstractTrajectory)
                 @error "TODO:"
             end
             s = send_to_device(D, select_last_dim(states_flatten, inds))  # !!! performance critical
-            a = vec(actions)[inds]
+            a = send_to_device(D, select_last_dim(actions_flatten, inds))
             r = send_to_device(D, vec(returns)[inds])
-            log_p = send_to_device(D, vec(action_log_probs)[inds])
+            log_p = send_to_device(D, select_last_dim(action_log_probs_flatten, inds))
             adv = send_to_device(D, vec(advantages)[inds])
 
             ps = Flux.params(AC)
@@ -256,8 +256,9 @@ function _update!(p::PPOPolicy, t::AbstractTrajectory)
                 v′ = AC.critic(s) |> vec
                 if AC.actor isa GaussianNetwork
                     μ, σ = AC.actor(s)
-                    log_p′ₐ = normlogpdf(μ, σ, a)
-                    entropy_loss = mean((log(2.0f0π) + 1) / 2 .+ log.(σ))
+                    log_p′ₐ = sum(normlogpdf(μ, σ, a), dims=1)
+                    log_p = sum(log_p, dims=1)
+                    entropy_loss = mean((log(2.0f0π) + 1) / 2 .+ sum(log.(σ), dims=1))
                 else
                     # actor is assumed to return discrete logits
                     logit′ = AC.actor(s)

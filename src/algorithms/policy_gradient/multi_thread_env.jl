@@ -82,9 +82,10 @@ end
 MacroTools.@forward MultiThreadEnv.envs Base.getindex, Base.length, Base.iterate
 
 function (env::MultiThreadEnv)(actions)
+    N = ndims(actions)
     @sync for i in 1:length(env)
         @spawn begin
-            env[i](actions[i])
+            env[i](selectdim(actions, N, i))
         end
     end
 end
