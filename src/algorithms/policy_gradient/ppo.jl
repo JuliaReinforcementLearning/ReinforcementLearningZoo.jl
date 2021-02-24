@@ -178,7 +178,12 @@ end
 function (agent::Agent{<:PPOPolicy})(env::MultiThreadEnv)
     dist = prob(agent.policy, env)
     action = rand.(agent.policy.rng, dist)
-    EnrichedAction(action; action_log_prob = logpdf.(dist, action))
+    if ndims(action) == 2
+        action_log_prob = sum(logpdf.(dist, action), dims=1)
+    else
+        action_log_prob = logpdf.(dist, action)
+    end
+    EnrichedAction(action; action_log_prob=vec(action_log_prob))
 end
 
 function RLBase.update!(
@@ -228,7 +233,7 @@ function _update!(p::PPOPolicy, t::AbstractTrajectory)
     returns = advantages .+ select_last_dim(states_plus_values, 1:n_rollout)
 
     actions_flatten = flatten_batch(select_last_dim(t[:action], 1:n))
-    action_log_probs_flatten = flatten_batch(select_last_dim(t[:action_log_prob], 1:n))
+    action_log_probs = select_last_dim(t[:action_log_prob], 1:n)
 
     # TODO: normalize advantage
     for epoch in 1:n_epochs
@@ -248,7 +253,7 @@ function _update!(p::PPOPolicy, t::AbstractTrajectory)
             s = send_to_device(D, select_last_dim(states_flatten, inds))  # !!! performance critical
             a = send_to_device(D, select_last_dim(actions_flatten, inds))
             r = send_to_device(D, vec(returns)[inds])
-            log_p = send_to_device(D, select_last_dim(action_log_probs_flatten, inds))
+            log_p = send_to_device(D, vec(action_log_probs)[inds])
             adv = send_to_device(D, vec(advantages)[inds])
 
             ps = Flux.params(AC)
@@ -256,8 +261,11 @@ function _update!(p::PPOPolicy, t::AbstractTrajectory)
                 v′ = AC.critic(s) |> vec
                 if AC.actor isa GaussianNetwork
                     μ, σ = AC.actor(s)
-                    log_p′ₐ = sum(normlogpdf(μ, σ, a), dims=1)
-                    log_p = sum(log_p, dims=1)
+                    if ndims(a) == 2
+                        log_p′ₐ = sum(normlogpdf(μ, σ, a), dims=1)
+                    else
+                        log_p′ₐ = normlogpdf(μ, σ, a)
+                    end
                     entropy_loss = mean((log(2.0f0π) + 1) / 2 .+ sum(log.(σ), dims=1))
                 else
                     # actor is assumed to return discrete logits
