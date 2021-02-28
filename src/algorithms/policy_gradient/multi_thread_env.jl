@@ -85,7 +85,11 @@ function (env::MultiThreadEnv)(actions)
     N = ndims(actions)
     @sync for i in 1:length(env)
         @spawn begin
-            env[i](selectdim(actions, N, i))
+            if N == 1 
+                env[i](actions[i])
+            else
+                env[i](selectdim(actions, N, i))
+            end
         end
     end
 end
@@ -127,6 +131,7 @@ function RLBase.is_terminated(env::MultiThreadEnv)
 end
 
 function RLBase.legal_action_space_mask(env::MultiThreadEnv)
+    N = ndims(env.states)
     @sync for i in 1:length(env)
         @spawn selectdim(env.legal_action_space_mask, N, i) .=
             legal_action_space_mask(env[i])
