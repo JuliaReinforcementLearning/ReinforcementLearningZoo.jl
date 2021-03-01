@@ -74,7 +74,9 @@ By default, `dist` is set to `Categorical`, which means it will only works
 on environments of discrete actions. To work with environments of continuous
 actions `dist` should be set to `Normal` and the `actor` in the `approximator`
 should be a `GaussianNetwork`. Using it with a `GaussianNetwork` supports 
-multi-dimensional action spaces.
+multi-dimensional action spaces, though it only supports it under the assumption
+that the dimensions are independent since the `GaussianNetwork` outputs a single
+`μ` and `σ` for each dimension which is used to simplify the calculations.
 """
 mutable struct PPOPolicy{A<:ActorCritic,D,R} <: AbstractPolicy
     approximator::A
