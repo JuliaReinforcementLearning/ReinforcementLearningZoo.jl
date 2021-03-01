@@ -60,6 +60,7 @@ Some built-in experiments are exported to help new users to easily run benchmark
 - ``E`JuliaRL_DeepCFR_OpenSpiel(leduc_poker)` ``
 - ``E`JuliaRL_DQN_SnakeGame` ``
 - ``E`JuliaRL_BC_CartPole` ``
+- ``E`JuliaRL_BasicDQN_EmptyRoom` ``
 - ``E`Dopamine_DQN_Atari(pong)` ``
 - ``E`Dopamine_Rainbow_Atari(pong)` ``
 - ``E`Dopamine_IQN_Atari(pong)` ``
