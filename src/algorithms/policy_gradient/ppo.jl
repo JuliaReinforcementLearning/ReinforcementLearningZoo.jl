@@ -71,7 +71,10 @@ end
 - `rng = Random.GLOBAL_RNG`,
 
 By default, `dist` is set to `Categorical`, which means it will only works
-on environments of discrete actions. To work with environments of
+on environments of discrete actions. To work with environments of continuous
+actions `dist` should be set to `Normal` and the `actor` in the `approximator`
+should be a `GaussianNetwork`. Using it with a `GaussianNetwork` supports 
+multi-dimensional action spaces.
 """
 mutable struct PPOPolicy{A<:ActorCritic,D,R} <: AbstractPolicy
     approximator::A
