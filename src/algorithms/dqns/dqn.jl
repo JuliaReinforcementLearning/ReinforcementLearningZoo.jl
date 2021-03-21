@@ -17,6 +17,7 @@ mutable struct DQNLearner{
     rng::R
     # for logging
     loss::Float32
+    double::Bool
 end
 
 """
@@ -36,8 +37,9 @@ See paper: [Human-level control through deep reinforcement learning](https://www
 - `update_freq::Int=4`: the frequency of updating the `approximator`.
 - `target_update_freq::Int=100`: the frequency of syncing `target_approximator`.
 - `stack_size::Union{Int, Nothing}=4`: use the recent `stack_size` frames to form a stacked state.
-- `traces = SARTS`, set to `SLARTSL` if you are to apply to an environment of `FULL_ACTION_SET`.
+- `traces = SARTS`: set to `SLARTSL` if you are to apply to an environment of `FULL_ACTION_SET`.
 - `rng = Random.GLOBAL_RNG`
+- `double = Bool`: Enable double dqn, enabled by default.
 """
 function DQNLearner(;
     approximator::Tq,
@@ -53,6 +55,7 @@ function DQNLearner(;
     traces = SARTS,
     update_step = 0,
     rng = Random.GLOBAL_RNG,
+    double::Bool = true
 ) where {Tq,Tt,Tf}
     copyto!(approximator, target_approximator)
     sampler = NStepBatchSampler{traces}(;
@@ -72,6 +75,7 @@ function DQNLearner(;
         sampler,
         rng,
         0.0f0,
+        double
     )
 end
 
@@ -102,18 +106,28 @@ function RLBase.update!(learner::DQNLearner, batch::NamedTuple)
     loss_func = learner.loss_func
     n = learner.sampler.n
     batch_size = learner.sampler.batch_size
+    double = learner.double
     D = device(Q)
 
     s, a, r, t, s′ = (send_to_device(D, batch[x]) for x in SARTS)
     a = CartesianIndex.(a, 1:batch_size)
 
-    target_q = Qₜ(s′)
-    if haskey(batch, :next_legal_actions_mask)
-        l′ = send_to_device(D, batch[:next_legal_actions_mask])
-        target_q .+= ifelse.(l′, 0.0f0, typemin(Float32))
+    if double
+        action_values = Q(s′)
+    else
+        action_values = Qₜ(s′)
     end
 
-    q′ = dropdims(maximum(target_q; dims = 1), dims = 1)
+    if haskey(batch, :next_legal_actions_mask)
+        l′ = send_to_device(D, batch[:next_legal_actions_mask])
+        action_values .+= ifelse.(l′, 0.0f0, typemin(Float32))
+    end
+
+    selected_actions = [(findmax(action_values[:,i]; dims=1))[2][1] for i in 1:batch_size]
+    target_q = Qₜ(s′)
+    q′ = [target_q[:,i][selected_actions[i]][1] for i in 1:batch_size]
+
+
     G = r .+ γ^n .* (1 .- t) .* q′
 
     gs = gradient(params(Q)) do
