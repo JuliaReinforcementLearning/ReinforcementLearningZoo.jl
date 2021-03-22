@@ -17,7 +17,7 @@ mutable struct DQNLearner{
     rng::R
     # for logging
     loss::Float32
-    double::Bool
+    is_enable_double_DQN::Bool
 end
 
 """
@@ -55,7 +55,7 @@ function DQNLearner(;
     traces = SARTS,
     update_step = 0,
     rng = Random.GLOBAL_RNG,
-    double::Bool = true
+    is_enable_double_DQN::Bool = true
 ) where {Tq,Tt,Tf}
     copyto!(approximator, target_approximator)
     sampler = NStepBatchSampler{traces}(;
@@ -75,7 +75,7 @@ function DQNLearner(;
         sampler,
         rng,
         0.0f0,
-        double
+        is_enable_double_DQN
     )
 end
 
@@ -106,27 +106,29 @@ function RLBase.update!(learner::DQNLearner, batch::NamedTuple)
     loss_func = learner.loss_func
     n = learner.sampler.n
     batch_size = learner.sampler.batch_size
-    double = learner.double
+    is_enable_double_DQN = learner.is_enable_double_DQN
     D = device(Q)
 
     s, a, r, t, s′ = (send_to_device(D, batch[x]) for x in SARTS)
     a = CartesianIndex.(a, 1:batch_size)
 
-    if double
-        action_values = Q(s′)
+    if is_enable_double_DQN
+        q_values = Q(s′)
     else
-        action_values = Qₜ(s′)
+        q_values = Qₜ(s′)
     end
-
+    
     if haskey(batch, :next_legal_actions_mask)
         l′ = send_to_device(D, batch[:next_legal_actions_mask])
-        action_values .+= ifelse.(l′, 0.0f0, typemin(Float32))
+        q_values .+= ifelse.(l′, 0.0f0, typemin(Float32))
     end
 
-    selected_actions = [(findmax(action_values[:,i]; dims=1))[2][1] for i in 1:batch_size]
-    target_q = Qₜ(s′)
-    q′ = [target_q[:,i][selected_actions[i]][1] for i in 1:batch_size]
-
+    if is_enable_double_DQN
+        selected_actions = dropdims(argmax(q_values, dims=1), dims=1)
+        q′ = Qₜ(s′)[selected_actions]
+    else
+        q′ = dropdims(maximum(q_values; dims = 1), dims = 1)
+    end
 
     G = r .+ γ^n .* (1 .- t) .* q′
 
