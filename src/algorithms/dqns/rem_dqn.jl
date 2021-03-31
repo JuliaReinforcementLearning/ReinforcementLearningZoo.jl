@@ -24,7 +24,7 @@ end
 """
     REMDQNLearner(;kwargs...)
 
-See paper: [Human-level control through deep reinforcement learning](https://www.nature.com/articles/nature14236)
+See paper: [An Optimistic Perspective on Offline Reinforcement Learning](https://arxiv.org/abs/1907.04543)
 
 # Keywords
 
