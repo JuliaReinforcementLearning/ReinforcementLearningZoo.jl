@@ -16,15 +16,14 @@ function RLCore.Experiment(
 
     env = CartPoleEnv(; T = Float32, rng = rng)
     ns, na = length(state(env)), length(action_space(env))
-    ensemble_num = 4
-    convex_polygon = rand(Float32, (1, ensemble_num))
-    convex_polygon ./= sum(convex_polygon)
+    ensemble_num = 6
 
     agent = Agent(
         policy = QBasedPolicy(
             learner = REMDQNLearner(
                 approximator = NeuralNetworkApproximator(
                     model = Chain(
+                        # Multi-head method, please refer to "https://github.com/google-research/batch_rl/tree/b55ba35ebd2381199125dd77bfac9e9c59a64d74/batch_rl/multi_head". TODO: multi-network method.
                         Dense(ns * ensemble_num, 128, relu; initW = glorot_uniform(rng)),
                         Dense(128, 128, relu; initW = glorot_uniform(rng)),
                         Dense(128, na * ensemble_num; initW = glorot_uniform(rng)),
@@ -46,7 +45,6 @@ function RLCore.Experiment(
                 update_freq = 1,
                 target_update_freq = 100,
                 ensemble_num = ensemble_num,
-                convex_polygon = convex_polygon,
                 rng = rng,
             ),
             explorer = EpsilonGreedyExplorer(

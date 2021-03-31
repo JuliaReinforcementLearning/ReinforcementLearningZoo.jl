@@ -36,6 +36,7 @@ See paper: [Human-level control through deep reinforcement learning](https://www
 - `update_horizon::Int=1`: length of update ('n' in n-step update).
 - `min_replay_history::Int=32`: number of transitions that should be experienced before updating the `approximator`.
 - `update_freq::Int=4`: the frequency of updating the `approximator`.
+- `ensemble_num::Int=1`: the number of ensemble approximators.
 - `target_update_freq::Int=100`: the frequency of syncing `target_approximator`.
 - `stack_size::Union{Int, Nothing}=4`: use the recent `stack_size` frames to form a stacked state.
 - `traces = SARTS`, set to `SLARTSL` if you are to apply to an environment of `FULL_ACTION_SET`.
@@ -52,7 +53,6 @@ function REMDQNLearner(;
     min_replay_history::Int = 32,
     update_freq::Int = 1,
     ensemble_num::Int = 1,
-    convex_polygon::Array{Float32},
     target_update_freq::Int = 100,
     traces = SARTS,
     update_step = 0,
@@ -65,6 +65,9 @@ function REMDQNLearner(;
         stack_size = stack_size,
         batch_size = batch_size,
     )
+    # Build a convex polygon to make a combination of multiple Q-value estimates as a Q-value estimate.
+    convex_polygon = rand(Float32, (1, ensemble_num))
+    convex_polygon ./= sum(convex_polygon)
     REMDQNLearner(
         approximator,
         target_approximator,
@@ -89,6 +92,7 @@ y -> begin
 end
 
 function (learner::REMDQNLearner)(env)
+    # In the multi-head method, we need to combine ensemble_num states and input them into the approximator. TODO: better implementation.
     s = send_to_device(device(learner.approximator), state(env))
     s = Flux.unsqueeze(s, ndims(s) + 1)
     s = multivcat(s, learner.ensemble_num)
