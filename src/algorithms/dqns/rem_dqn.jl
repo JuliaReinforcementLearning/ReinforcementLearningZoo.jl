@@ -105,6 +105,7 @@ function RLBase.update!(learner::REMDQNLearner, batch::NamedTuple)
     n = learner.sampler.n
     batch_size = learner.sampler.batch_size
     ensemble_num = learner.ensemble_num
+    D = device(Q)
     # Build a convex polygon to make a combination of multiple Q-value estimates as a Q-value estimate.
     if learner.ensemble_method == :rand
         convex_polygon = rand(Float32, (1, ensemble_num))
@@ -112,7 +113,7 @@ function RLBase.update!(learner::REMDQNLearner, batch::NamedTuple)
         convex_polygon = ones(Float32, (1, ensemble_num))
     end
     convex_polygon ./= sum(convex_polygon)
-    D = device(Q)
+    convex_polygon = send_to_device(D, convex_polygon)
 
     s, a, r, t, s′ = (send_to_device(D, batch[x]) for x in SARTS)
     a = CartesianIndex.(a, 1:batch_size)
