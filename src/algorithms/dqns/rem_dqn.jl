@@ -15,7 +15,7 @@ mutable struct REMDQNLearner{
     target_update_freq::Int
     sampler::NStepBatchSampler
     ensemble_num::Int
-    convex_polygon::Array{Float32}
+    ensemble_method::Symbol
     rng::R
     # for logging
     loss::Float32
@@ -37,6 +37,7 @@ See paper: [An Optimistic Perspective on Offline Reinforcement Learning](https:/
 - `min_replay_history::Int=32`: number of transitions that should be experienced before updating the `approximator`.
 - `update_freq::Int=4`: the frequency of updating the `approximator`.
 - `ensemble_num::Int=1`: the number of ensemble approximators.
+- `ensemble_method::Symbol=:rand`: the method of combining Q values. ':rand' represents random ensemble mixture, and ':mean' is the average.
 - `target_update_freq::Int=100`: the frequency of syncing `target_approximator`.
 - `stack_size::Union{Int, Nothing}=4`: use the recent `stack_size` frames to form a stacked state.
 - `traces = SARTS`, set to `SLARTSL` if you are to apply to an environment of `FULL_ACTION_SET`.
@@ -53,6 +54,7 @@ function REMDQNLearner(;
     min_replay_history::Int = 32,
     update_freq::Int = 1,
     ensemble_num::Int = 1,
+    ensemble_method::Symbol = :rand,
     target_update_freq::Int = 100,
     traces = SARTS,
     update_step = 0,
@@ -65,9 +67,6 @@ function REMDQNLearner(;
         stack_size = stack_size,
         batch_size = batch_size,
     )
-    # Build a convex polygon to make a combination of multiple Q-value estimates as a Q-value estimate.
-    convex_polygon = rand(Float32, (1, ensemble_num))
-    convex_polygon ./= sum(convex_polygon)
     REMDQNLearner(
         approximator,
         target_approximator,
@@ -78,7 +77,7 @@ function REMDQNLearner(;
         target_update_freq,
         sampler,
         ensemble_num,
-        convex_polygon,
+        ensemble_method,
         rng,
         0.0f0,
     )
@@ -92,22 +91,10 @@ y -> begin
 end
 
 function (learner::REMDQNLearner)(env)
-    # In the multi-head method, we need to combine ensemble_num states and input them into the approximator. TODO: better implementation.
     s = send_to_device(device(learner.approximator), state(env))
     s = Flux.unsqueeze(s, ndims(s) + 1)
-    s = multivcat(s, learner.ensemble_num)
-    multi_q = learner.approximator(s)
-    q = learner.convex_polygon .* reshape(multi_q, :, learner.ensemble_num)
-    vec(sum(q, dims = 2)) |> send_to_host
-end
-
-function multivcat(arr::Array{T, N}, num::Int) where{T, N}
-    marr = Array{T, N}(undef, size(arr))
-    copyto!(marr, arr)
-    for i in 2:num
-        marr = vcat(marr, arr)
-    end
-    marr
+    q = reshape(learner.approximator(s), :, learner.ensemble_num)
+    vec(mean(q, dims = 2)) |> send_to_host
 end
 
 function RLBase.update!(learner::REMDQNLearner, batch::NamedTuple)
@@ -118,13 +105,19 @@ function RLBase.update!(learner::REMDQNLearner, batch::NamedTuple)
     n = learner.sampler.n
     batch_size = learner.sampler.batch_size
     ensemble_num = learner.ensemble_num
-    convex_polygon = learner.convex_polygon
+    # Build a convex polygon to make a combination of multiple Q-value estimates as a Q-value estimate.
+    if learner.ensemble_method == :rand
+        convex_polygon = rand(Float32, (1, ensemble_num))
+    else
+        convex_polygon = ones(Float32, (1, ensemble_num))
+    end
+    convex_polygon ./= sum(convex_polygon)
     D = device(Q)
 
     s, a, r, t, s′ = (send_to_device(D, batch[x]) for x in SARTS)
     a = CartesianIndex.(a, 1:batch_size)
 
-    target_q = Qₜ(multivcat(s′, ensemble_num))
+    target_q = Qₜ(s′)
     target_q = convex_polygon .* reshape(target_q, :, ensemble_num, batch_size)
     target_q = dropdims(sum(target_q, dims=2), dims=2)
 
@@ -135,8 +128,6 @@ function RLBase.update!(learner::REMDQNLearner, batch::NamedTuple)
 
     q′ = dropdims(maximum(target_q; dims = 1), dims = 1)
     G = r .+ γ^n .* (1 .- t) .* q′
-
-    s = multivcat(s, ensemble_num)
 
     gs = gradient(params(Q)) do
         q = Q(s)
