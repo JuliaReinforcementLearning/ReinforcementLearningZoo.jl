@@ -29,10 +29,10 @@ function RLCore.Experiment(
         model = GaussianNetwork(
             pre = Chain(
                 Dense(ns, 30, relu), 
-                Dense(30, 30, relu)
+                Dense(30, 30, relu),
             ),
-            μ = Chain(Dense(30, na, initW = init)),
-            logσ = Chain(Dense(30, na, x -> clamp.(x, typeof(x)(-10), typeof(x)(2)), initW = init)),
+            μ = Chain(Dense(30, 1, initW = init)),
+            logσ = Chain(Dense(30, 1, x -> clamp.(x, typeof(x)(-10), typeof(x)(2)), initW = init)),
         ),
         optimizer = ADAM(0.003),
     )
