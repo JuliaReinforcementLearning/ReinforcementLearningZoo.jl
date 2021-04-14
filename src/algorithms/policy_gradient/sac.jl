@@ -146,8 +146,6 @@ function RLBase.update!(p::SACPolicy, batch::NamedTuple{SARTS})
 
     y = r .+ γ .* (1 .- t) .* vec((q′ .- α .* log_π))
 
-    @show size(s) size(a) size(a′) size(q′_input) size(q′) size(y)
-
     # Train Q Networks
     q_input = vcat(s, a)
 
@@ -167,7 +165,7 @@ function RLBase.update!(p::SACPolicy, batch::NamedTuple{SARTS})
         a, log_π = evaluate(p, s)
         q_input = vcat(s, a)
         q = min.(p.qnetwork1(q_input), p.qnetwork2(q_input))
-        mean(α .* log_π .- q)
+        α * mean(log_π .- q)
     end
     update!(p.policy, p_grad)
 
