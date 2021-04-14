@@ -18,10 +18,11 @@ function RLCore.Experiment(
     low = A.left
     high = A.right
     ns = length(state(inner_env))
+    na = 1
 
     env = ActionTransformedEnv(
         inner_env;
-        action_mapping = x -> low + (x + 1) * 0.5 * (high - low),
+        action_mapping = x -> low + (x[1] + 1) * 0.5 * (high - low),
     )
     init = glorot_uniform(rng)
 
@@ -31,15 +32,15 @@ function RLCore.Experiment(
                 Dense(ns, 30, relu), 
                 Dense(30, 30, relu),
             ),
-            μ = Chain(Dense(30, 1, initW = init)),
-            logσ = Chain(Dense(30, 1, x -> clamp.(x, typeof(x)(-10), typeof(x)(2)), initW = init)),
+            μ = Chain(Dense(30, na, initW = init)),
+            logσ = Chain(Dense(30, na, x -> clamp.(x, typeof(x)(-10), typeof(x)(2)), initW = init)),
         ),
         optimizer = ADAM(0.003),
     )
 
     create_q_net() = NeuralNetworkApproximator(
         model = Chain(
-            Dense(ns + 1, 30, relu; initW = init),
+            Dense(ns + na, 30, relu; initW = init),
             Dense(30, 30, relu; initW = init),
             Dense(30, 1; initW = init),
         ),
@@ -58,7 +59,7 @@ function RLCore.Experiment(
             α = 0.2f0,
             batch_size = 64,
             start_steps = 1000,
-            start_policy = RandomPolicy(-1.0..1.0; rng = rng),
+            start_policy = RandomPolicy(Space([-1.0..1.0 for _ in 1:na]); rng = rng),
             update_after = 1000,
             update_every = 1,
             rng = rng,
@@ -66,7 +67,7 @@ function RLCore.Experiment(
         trajectory = CircularArraySARTTrajectory(
             capacity = 10000,
             state = Vector{Float32} => (ns,),
-            action = Float32 => (),
+            action = Float32 => (na,),
         ),
     )
 

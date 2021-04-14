@@ -99,7 +99,7 @@ function (p::SACPolicy)(env)
         s = state(env)
         s = Flux.unsqueeze(s, ndims(s) + 1)
         # trainmode:
-        action = evaluate(p, s)[1][] # returns action as scalar
+        action = dropdims(evaluate(p, s)[1], dims=2) # Single action vec, drop second dim
 
         # testmode:
         # if testing dont sample an action, but act deterministically by
@@ -113,7 +113,7 @@ This function is compatible with a multidimensional action space.
 """
 function evaluate(p::SACPolicy, state)
     μ, logσ = p.policy(state)
-    π_dist = StructArray{Normal}((μ, exp.(logσ)))
+    π_dist = Normal.(μ, exp.(logσ))
     z = rand.(p.rng, π_dist)
     logp_π = sum(logpdf.(π_dist, z), dims = 1)
     logp_π -= sum((2.0f0 .* (log(2.0f0) .- z - softplus.(-2.0f0 * z))), dims = 1)
@@ -146,8 +146,9 @@ function RLBase.update!(p::SACPolicy, batch::NamedTuple{SARTS})
 
     y = r .+ γ .* (1 .- t) .* vec((q′ .- α .* log_π))
 
+    @show size(s) size(a) size(a′) size(q′_input) size(q′) size(y)
+
     # Train Q Networks
-    a = Flux.unsqueeze(a, 1)
     q_input = vcat(s, a)
 
     q_grad_1 = gradient(Flux.params(p.qnetwork1)) do
