@@ -112,8 +112,8 @@ end
 This function is compatible with a multidimensional action space.
 """
 function evaluate(p::SACPolicy, state)
-    μ, σ = p.policy(state)
-    π_dist = Normal.(μ, σ)
+    μ, logσ = p.policy(state)
+    π_dist = StructArray{Normal}((μ, exp.(logσ)))
     z = rand.(p.rng, π_dist)
     logp_π = sum(logpdf.(π_dist, z), dims = 1)
     logp_π -= sum((2.0f0 .* (log(2.0f0) .- z - softplus.(-2.0f0 * z))), dims = 1)
