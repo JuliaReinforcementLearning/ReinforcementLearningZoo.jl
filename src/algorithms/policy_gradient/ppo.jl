@@ -148,9 +148,8 @@ function RLBase.prob(
     if p.update_step < p.n_random_start
         @error "todo"
     else
-        p.approximator.actor(send_to_device(device(p.approximator), state)) |>
-        send_to_host |>
-        StructArray{Normal}
+        μ, logσ = p.approximator.actor(send_to_device(device(p.approximator), state)) |> send_to_host 
+        StructArray{Normal}((μ, exp.(logσ)))
     end
 end
 
