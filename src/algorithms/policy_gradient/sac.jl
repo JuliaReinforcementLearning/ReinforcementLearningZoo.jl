@@ -134,7 +134,6 @@ end
 
 function RLBase.update!(p::SACPolicy, batch::NamedTuple{SARTS})
     s, a, r, t, s′ = send_to_device(device(p.qnetwork1), batch)
-    @show size(s) size(a) size(r)
 
     γ, ρ, α = p.γ, p.ρ, p.α
 
@@ -146,12 +145,10 @@ function RLBase.update!(p::SACPolicy, batch::NamedTuple{SARTS})
     q′ = min.(p.target_qnetwork1(q′_input), p.target_qnetwork2(q′_input))
 
     y = r .+ γ .* (1 .- t) .* vec((q′ .- α .* log_π))
-    @show size(a′) size(q′_input) size(q′) size(y)
 
     # Train Q Networks
     a = Flux.unsqueeze(a, 1)
     q_input = vcat(s, a)
-    @show a q_input
 
     q_grad_1 = gradient(Flux.params(p.qnetwork1)) do
         q1 = p.qnetwork1(q_input) |> vec
