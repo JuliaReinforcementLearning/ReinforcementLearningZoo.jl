@@ -271,7 +271,7 @@ function _update!(p::PPOPolicy, t::AbstractTrajectory)
                     else
                         log_p′ₐ = normlogpdf(μ, σ, a)
                     end
-                    entropy_loss = mean(size(σ, 1) * (log(2.0f0π) + 1) .+ sum(log.(σ), dims = 1)) / 2
+                    entropy_loss = mean(size(σ, 1) * (log(2.0f0π) + 1) .+ sum(log, σ; dims = 1)) / 2
                 else
                     # actor is assumed to return discrete logits
                     logit′ = AC.actor(s)
