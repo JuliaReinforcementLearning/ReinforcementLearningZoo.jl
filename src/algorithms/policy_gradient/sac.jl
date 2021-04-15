@@ -47,7 +47,7 @@ end
 - `rng = Random.GLOBAL_RNG`,
 
 `policy` is expected to output a tuple `(μ, logσ)` of mean and
-standard deviations for the desired action distributions, this
+log standard deviations for the desired action distributions, this
 can be implemented using a `GaussianNetwork` in a `NeuralNetworkApproximator`.
 """
 function SACPolicy(;
