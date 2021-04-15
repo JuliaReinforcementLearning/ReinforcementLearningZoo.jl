@@ -130,7 +130,13 @@ function RLBase.update!(learner::QRDQNLearner, batch::NamedTuple)
         q = flatten_batch(Q(s))
         q = q[a]
 
-        huber_loss = huber_loss(reshape(target, N, 1, batch_size) .- reshape(q, 1, N, batch_size), κ)
+        target = reshape(target, N, 1, batch_size)
+        q = reshape(q, 1, N, batch_size)
+
+        TD_error = (target .- q)
+        temp = dropgrad(abs.(TD_error) .<  κ)
+        x = ofeltype(targe, 0.5)
+        huber_loss = agg(((abs_error.^2) .* temp) .* x .+ κ*(abs_error .- x*κ) .* (1 .- temp))
 
         # dropgrad
         raw_loss =
