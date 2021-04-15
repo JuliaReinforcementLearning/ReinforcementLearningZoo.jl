@@ -162,7 +162,7 @@ function RLBase.update!(p::SACPolicy, batch::NamedTuple{SARTS})
         a, log_π = evaluate(p, s)
         q_input = vcat(s, a)
         q = min.(p.qnetwork1(q_input), p.qnetwork2(q_input))
-        α * mean(log_π .- q)
+        mean(α .* log_π .- q)
     end
     update!(p.policy, p_grad)
 
