@@ -23,6 +23,9 @@ mutable struct SACPolicy{
     update_every::Int
     step::Int
     rng::R
+    # Logging
+    reward_term::Float32
+    entropy_term::Float32
 end
 
 """
@@ -85,6 +88,8 @@ function SACPolicy(;
         update_every,
         step,
         rng,
+        0f0,
+        0f0,
     )
 end
 
@@ -128,6 +133,7 @@ function RLBase.update!(
 )
     length(traj) > p.update_after || return
     p.step % p.update_every == 0 || return
+    # Maybe add option to run this `batch_updates` number of times?
     inds, batch = sample(p.rng, traj, BatchSampler{SARTS}(p.batch_size))
     update!(p, batch)
 end
@@ -141,7 +147,7 @@ function RLBase.update!(p::SACPolicy, batch::NamedTuple{SARTS})
     q′_input = vcat(s′, a′)
     q′ = min.(p.target_qnetwork1(q′_input), p.target_qnetwork2(q′_input))
 
-    y = r .+ γ .* (1 .- t) .* vec((q′ .- α .* log_π))
+    y = r .+ γ .* (1 .- t) .* vec(q′ .- α .* log_π)
 
     # Train Q Networks
     q_input = vcat(s, a)
@@ -162,7 +168,13 @@ function RLBase.update!(p::SACPolicy, batch::NamedTuple{SARTS})
         a, log_π = evaluate(p, s)
         q_input = vcat(s, a)
         q = min.(p.qnetwork1(q_input), p.qnetwork2(q_input))
-        mean(α .* log_π .- q)
+        reward = mean(q)
+        entropy = mean(log_π)
+        ignore() do 
+            p.reward_term = reward
+            p.entropy_term = entropy
+        end
+        α * entropy - reward
     end
     update!(p.policy, p_grad)
 

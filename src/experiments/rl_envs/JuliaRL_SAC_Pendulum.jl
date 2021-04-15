@@ -67,7 +67,7 @@ function RLCore.Experiment(
         trajectory = CircularArraySARTTrajectory(
             capacity = 10000,
             state = Vector{Float32} => (ns,),
-            action = Float32 => (na,),
+            action = Vector{Float32} => (na,),
         ),
     )
 
@@ -77,9 +77,16 @@ function RLCore.Experiment(
     hook = ComposedHook(
         total_reward_per_episode,
         time_per_step,
-        DoEveryNEpisode() do t, agent, env
+        DoEveryNStep() do t, agent, env
             with_logger(lg) do
-                @info "training" reward = total_reward_per_episode.rewards[end]
+                @info(
+                    "training",
+                    reward_term = agent.policy.reward_term,
+                    entropy_term = agent.policy.entropy_term,
+                )
+                if is_terminated(env)
+                    @info "training" reward = total_reward_per_episode.reward log_step_increment = 0
+                end
             end
         end,
     )
