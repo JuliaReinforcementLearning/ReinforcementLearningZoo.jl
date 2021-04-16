@@ -105,14 +105,14 @@ function RLBase.update!(learner::QRDQNLearner, batch::NamedTuple)
     n = learner.sampler.n
     batch_size = learner.sampler.batch_size
     N = learner.ensemble_num
-    τ = rand(learner.device_rng, Float32, N, batch_size) 
+    τ = rand(learner.rng, Float32, N, batch_size) 
     κ = learner.κ
     D = device(Q)
 
     s, a, r, t, s′ = (send_to_device(D, batch[x]) for x in SARTS)
     a = CartesianIndex.(repeat(batch.action, inner = N), 1:(N*batch_size))
 
-    target_q = reshape(Qₜ(s′), :, ensemble_num, batch_size)
+    target_q = reshape(Qₜ(s′), :, N, batch_size)
     avg_q = mean(target_q, dims=2)
 
     if haskey(batch, :next_legal_actions_mask)
@@ -124,23 +124,23 @@ function RLBase.update!(learner::QRDQNLearner, batch::NamedTuple)
     aₜ = aₜ .+ typeof(aₜ)(CartesianIndices((0:0, 0:N-1, 0:0)))
     qₜ = reshape(target_q[aₜ], :, batch_size)
     target =
-        reshape(r, 1, batch_size) .+ γ * reshape(1 .- t, 1, batch_size) .* qₜ 
-        
+    reshape(r, 1, batch_size) .+ γ * reshape(1 .- t, 1, batch_size) .* qₜ 
+
     gs = gradient(params(Q)) do
-        q = flatten_batch(Q(s))
+        q = reshape(Q(s), :, N*batch_size)
         q = q[a]
 
         target = reshape(target, N, 1, batch_size)
         q = reshape(q, 1, N, batch_size)
 
         TD_error = (target .- q)
-        temp = dropgrad(abs.(TD_error) .<  κ)
-        x = ofeltype(targe, 0.5)
-        huber_loss = agg(((abs_error.^2) .* temp) .* x .+ κ*(abs_error .- x*κ) .* (1 .- temp))
+        temp = Zygote.dropgrad(abs.(TD_error) .<  κ)
+        x = target
+        huber_loss = mean(((TD_error.^2) .* temp) .* x .+ κ*(TD_error .- x*κ) .* (1 .- temp))
 
         # dropgrad
         raw_loss =
-            abs.(reshape(τ, 1, N, batch_size) .- dropgrad(TD_error .< 0)) .*
+            abs.(reshape(τ, 1, N, batch_size) .- Zygote.dropgrad(TD_error .< 0)) .*
             huber_loss ./ κ
         loss_per_quantile = reshape(sum(raw_loss; dims = 1), N, batch_size)
         loss_per_element = mean(loss_per_quantile; dims = 1)  # use as priorities
