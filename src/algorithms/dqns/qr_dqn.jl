@@ -135,15 +135,13 @@ function RLBase.update!(learner::QRDQNLearner, batch::NamedTuple)
 
         TD_error = (target .- q)
         temp = Zygote.dropgrad(abs.(TD_error) .<  κ)
-        x = target
-        huber_loss = mean(((TD_error.^2) .* temp) .* x .+ κ*(TD_error .- x*κ) .* (1 .- temp))
+        huber_loss = ((TD_error.^2) .* temp) + κ*(TD_error .- 0.5*κ) .* (1 .- temp)
 
         # dropgrad
         raw_loss =
             abs.(reshape(τ, 1, N, batch_size) .- Zygote.dropgrad(TD_error .< 0)) .*
             huber_loss ./ κ
-        loss_per_quantile = reshape(sum(raw_loss; dims = 1), N, batch_size)
-        loss_per_element = mean(loss_per_quantile; dims = 1)  # use as priorities
+        loss_per_element = mean(sum(raw_loss; dims = 1), dims=1)
         loss =
             mean(loss_per_element)
         ignore() do
