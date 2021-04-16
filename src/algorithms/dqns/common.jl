@@ -35,3 +35,34 @@ function RLBase.update!(
     push!(trajectory[:terminal], is_terminated(env))
     push!(trajectory[:priority], p.learner.default_priority)
 end
+
+#####
+# some common components for Dueling network
+# Dueling network automatically produces separate estimates of the state value function network and advantage function network. The expected output size of val is 1, and adv is the size of the action space.
+#####
+
+struct DuelingNetwork
+    base
+    val
+    adv
+end
+
+function build_dueling_network(network::Chain)
+    lm = length(network)
+    if !(network[lm] isa Dense) || !(network[lm-1] isa Dense) 
+        error("The Qnetwork provided is incompatible with dueling.")
+    end
+    base = Chain([deepcopy(network[i]) for i=1:lm-2]...)
+    last_layer_dims = size(network[lm].W, 2)
+    val = Chain(deepcopy(network[lm-1]), Dense(last_layer_dims, 1))
+    adv = Chain([deepcopy(network[i]) for i=lm-1:lm]...)
+    return DuelingNetwork(base, val, adv)
+end
+
+Flux.@functor DuelingNetwork
+
+function (m::DuelingNetwork)(state)
+    x = m.base(state)
+    val = m.val(x)
+    return val .+ m.adv(x) .- mean(m.adv(x), dims=1)
+end
