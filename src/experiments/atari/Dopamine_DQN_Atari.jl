@@ -23,7 +23,7 @@ function RLCore.Experiment(
     N_ACTIONS = length(action_space(env))
     init = glorot_uniform(rng)
 
-    base_model =
+    create_model() =
         Chain(
             x -> x ./ 255,
             CrossCor((8, 8), N_FRAMES => 32, relu; stride = 4, pad = 2, init = init),
@@ -32,16 +32,16 @@ function RLCore.Experiment(
             x -> reshape(x, :, size(x)[end]),
             Dense(11 * 11 * 64, 512, relu; initW = init),
             Dense(512, N_ACTIONS; initW = init),
-        )
+        ) |> gpu
 
     agent = Agent(
         policy = QBasedPolicy(
             learner = DQNLearner(
                 approximator = NeuralNetworkApproximator(
-                    model = build_dueling_network(base_model) |> gpu,
+                    model = create_model(),
                     optimizer = RMSProp(0.00025, 0.95),
                 ),  # unlike TF/PyTorch RMSProp doesn't support center
-                target_approximator = NeuralNetworkApproximator(model = build_dueling_network(base_model)),
+                target_approximator = NeuralNetworkApproximator(model = create_model()),
                 update_freq = 4,
                 γ = 0.99f0,
                 update_horizon = 1,
