@@ -116,7 +116,7 @@ function RLBase.update!(learner::QRDQNLearner, batch::NamedTuple)
     s, a, r, t, s′ = (send_to_device(D, batch[x]) for x in SARTS)
     a = CartesianIndex.(repeat(batch.action, inner = N), 1:(N*batch_size))
 
-    target_q = reshape(Qₜ(s), :, N, batch_size)
+    target_q = reshape(Qₜ(s′), :, N, batch_size)
     avg_q = mean(target_q, dims=2)
 
     if haskey(batch, :next_legal_actions_mask)
