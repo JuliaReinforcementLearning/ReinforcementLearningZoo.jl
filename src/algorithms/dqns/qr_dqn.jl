@@ -116,7 +116,7 @@ function RLBase.update!(learner::QRDQNLearner, batch::NamedTuple)
     s, a, r, t, s′ = (send_to_device(D, batch[x]) for x in SARTS)
     a = CartesianIndex.(repeat(batch.action, inner = N), 1:(N*batch_size))
 
-    target_q = reshape(Qₜ(s′), :, N, batch_size)
+    target_q = reshape(Qₜ(s), :, N, batch_size)
     avg_q = mean(target_q, dims=2)
 
     if haskey(batch, :next_legal_actions_mask)
@@ -139,19 +139,19 @@ function RLBase.update!(learner::QRDQNLearner, batch::NamedTuple)
 
         TD_error = (target .- q)
         temp = Zygote.dropgrad(abs.(TD_error) .<  κ)
-        huber_loss = ((TD_error.^2) .* temp) + κ*(TD_error .- 0.5*κ) .* (1 .- temp)
+        element_wise_huber_loss = ((TD_error.^2) .* temp) + κ*(TD_error .- 0.5*κ) .* (1 .- temp)
 
         # dropgrad
-        raw_loss =
+        element_wise_huber_loss =
             abs.(reshape(τ, 1, N) .- Zygote.dropgrad(TD_error .< 0)) .*
-            huber_loss ./ κ
-        loss_per_element = mean(sum(raw_loss; dims = 1), dims=1)
-        loss =
-            mean(loss_per_element)
+            element_wise_huber_loss ./ κ
+        batch_quantile_huber_loss = mean(sum(element_wise_huber_loss; dims = 1), dims=1)
+        quantile_huber_loss =
+            mean(batch_quantile_huber_loss)
         ignore() do
-            learner.loss = loss
+            learner.loss = quantile_huber_loss
         end
-        loss
+        quantile_huber_loss
     end
 
     update!(Q, gs)
