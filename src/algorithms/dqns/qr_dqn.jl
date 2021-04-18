@@ -17,7 +17,7 @@ mutable struct QRDQNLearner{
     ensemble_num::Int
     rng::R
     κ::Float32
-    # for logging
+    τ::Vector{Float64}
     loss::Float32
 end
 
@@ -54,7 +54,7 @@ function QRDQNLearner(;
     min_replay_history::Int = 32,
     update_freq::Int = 1,
     ensemble_num::Int = 1,
-    target_update_freq::Int = 100,  
+    target_update_freq::Int = 100,
     traces = SARTS,
     update_step = 0,
     κ::Float32 = 1.0f0,
@@ -67,6 +67,9 @@ function QRDQNLearner(;
         stack_size = stack_size,
         batch_size = batch_size,
     )
+    N = ensemble_num
+    τ = collect(0:N+1)/N
+    τ  = (τ[2:N+1]+τ[1:N])/2
     QRDQNLearner(
         approximator,
         target_approximator,
@@ -76,9 +79,10 @@ function QRDQNLearner(;
         update_step,
         target_update_freq,
         sampler,
-        ensemble_num,
+        N,
         rng,
         κ,
+        τ,
         0.0f0,
     )
 end
@@ -105,8 +109,8 @@ function RLBase.update!(learner::QRDQNLearner, batch::NamedTuple)
     n = learner.sampler.n
     batch_size = learner.sampler.batch_size
     N = learner.ensemble_num
-    τ = rand(learner.rng, Float32, N, batch_size) 
     κ = learner.κ
+    τ = learner.τ
     D = device(Q)
 
     s, a, r, t, s′ = (send_to_device(D, batch[x]) for x in SARTS)
@@ -124,7 +128,7 @@ function RLBase.update!(learner::QRDQNLearner, batch::NamedTuple)
     aₜ = aₜ .+ typeof(aₜ)(CartesianIndices((0:0, 0:N-1, 0:0)))
     qₜ = reshape(target_q[aₜ], :, batch_size)
     target =
-    reshape(r, 1, batch_size) .+ γ * reshape(1 .- t, 1, batch_size) .* qₜ 
+    reshape(r, 1, batch_size) .+ γ * reshape(1 .- t, 1, batch_size) .* qₜ
 
     gs = gradient(params(Q)) do
         q = reshape(Q(s), :, N*batch_size)
@@ -139,7 +143,7 @@ function RLBase.update!(learner::QRDQNLearner, batch::NamedTuple)
 
         # dropgrad
         raw_loss =
-            abs.(reshape(τ, 1, N, batch_size) .- Zygote.dropgrad(TD_error .< 0)) .*
+            abs.(reshape(τ, 1, N) .- Zygote.dropgrad(TD_error .< 0)) .*
             huber_loss ./ κ
         loss_per_element = mean(sum(raw_loss; dims = 1), dims=1)
         loss =
@@ -149,6 +153,6 @@ function RLBase.update!(learner::QRDQNLearner, batch::NamedTuple)
         end
         loss
     end
-    
+
     update!(Q, gs)
-end 
+end
