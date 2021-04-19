@@ -16,9 +16,9 @@ function RLCore.Experiment(
 
     env = CartPoleEnv(; T = Float32, rng = rng)
     ns, na = length(state(env)), length(action_space(env))
-    ensemble_num = 6
+    quantile_num = 6
     κ = 1.0f0
-    
+
     agent = Agent(
         policy = QBasedPolicy(
             learner = QRDQNLearner(
@@ -27,7 +27,7 @@ function RLCore.Experiment(
                         # Multi-head method, please refer to "https://github.com/google-research/batch_rl/tree/b55ba35ebd2381199125dd77bfac9e9c59a64d74/batch_rl/multi_head".
                         Dense(ns, 128, relu; initW = glorot_uniform(rng)),
                         Dense(128, 128, relu; initW = glorot_uniform(rng)),
-                        Dense(128, na * ensemble_num; initW = glorot_uniform(rng)),
+                        Dense(128, na * quantile_num; initW = glorot_uniform(rng)),
                     ) |> cpu,
                     optimizer = ADAM(),
                 ),
@@ -35,7 +35,7 @@ function RLCore.Experiment(
                     model = Chain(
                         Dense(ns, 128, relu; initW = glorot_uniform(rng)),
                         Dense(128, 128, relu; initW = glorot_uniform(rng)),
-                        Dense(128, na * ensemble_num; initW = glorot_uniform(rng)),
+                        Dense(128, na * quantile_num; initW = glorot_uniform(rng)),
                     ) |> cpu,
                 ),
                 loss_func = huber_loss,
@@ -45,7 +45,7 @@ function RLCore.Experiment(
                 min_replay_history = 100,
                 update_freq = 1,
                 target_update_freq = 100,
-                ensemble_num = ensemble_num,
+                quantile_num = quantile_num,
                 κ = κ,
                 rng = rng,
             ),

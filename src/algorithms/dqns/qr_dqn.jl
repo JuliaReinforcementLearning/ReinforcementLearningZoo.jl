@@ -14,7 +14,7 @@ mutable struct QRDQNLearner{
     update_step::Int
     target_update_freq::Int
     sampler::NStepBatchSampler
-    ensemble_num::Int
+    quantile_num::Int
     rng::R
     κ::Float32
     τ::Vector{Float64}
@@ -36,7 +36,7 @@ See paper: [Distributional Reinforcement Learning with Quantile Regression](http
 - `update_horizon::Int=1`: length of update ('n' in n-step update).
 - `min_replay_history::Int=32`: number of transitions that should be experienced before updating the `approximator`.
 - `update_freq::Int=4`: the frequency of updating the `approximator`.
-- `ensemble_num::Int=1`: the number of ensemble approximators.
+- `quantile_num::Int=1`: the number of quantile approximators.
 - `target_update_freq::Int=100`: the frequency of syncing `target_approximator`.
 - `stack_size::Union{Int, Nothing}=4`: use the recent `stack_size` frames to form a stacked state.
 - `traces = SARTS`, set to `SLARTSL` if you are to apply to an environment of `FULL_ACTION_SET`.
@@ -53,7 +53,7 @@ function QRDQNLearner(;
     update_horizon::Int = 1,
     min_replay_history::Int = 32,
     update_freq::Int = 1,
-    ensemble_num::Int = 1,
+    quantile_num::Int = 1,
     target_update_freq::Int = 100,
     traces = SARTS,
     update_step = 0,
@@ -67,7 +67,7 @@ function QRDQNLearner(;
         stack_size = stack_size,
         batch_size = batch_size,
     )
-    N = ensemble_num
+    N = quantile_num
     τ = collect(0:N+1)/N
     τ  = (τ[2:N+1]+τ[1:N])/2
     QRDQNLearner(
@@ -97,9 +97,26 @@ end
 function (learner::QRDQNLearner)(env)
     s = send_to_device(device(learner.approximator), state(env))
     s = Flux.unsqueeze(s, ndims(s) + 1)
-    q = reshape(learner.approximator(s), :, learner.ensemble_num)
+    q = reshape(learner.approximator(s), :, learner.quantile_num)
     vec(mean(q, dims = 2)) |> send_to_host
 end
+
+function quantile_huber_loss(target::AbstractArray, q::AbstractArray, κ::Float32, τ::Vector{Float64}, N::Int)
+    TD_error = (target .- q)
+
+    # dropgrad
+    temp = Zygote.dropgrad(abs.(TD_error) .<  κ)
+    element_wise_huber_loss = ((TD_error.^2) .* temp) + κ*(TD_error .- 0.5*κ) .* (1 .- temp)
+    element_wise_huber_loss =
+        abs.(reshape(τ, 1, N) .- Zygote.dropgrad(TD_error .< 0)) .*
+        element_wise_huber_loss ./ κ
+
+    batch_quantile_huber_loss = mean(sum(element_wise_huber_loss; dims = 1), dims=1)
+    quantile_huber_loss =
+        mean(batch_quantile_huber_loss)
+
+    quantile_huber_loss
+    end
 
 function RLBase.update!(learner::QRDQNLearner, batch::NamedTuple)
     Q = learner.approximator
@@ -108,7 +125,7 @@ function RLBase.update!(learner::QRDQNLearner, batch::NamedTuple)
     loss_func = learner.loss_func
     n = learner.sampler.n
     batch_size = learner.sampler.batch_size
-    N = learner.ensemble_num
+    N = learner.quantile_num
     κ = learner.κ
     τ = learner.τ
     D = device(Q)
@@ -116,16 +133,16 @@ function RLBase.update!(learner::QRDQNLearner, batch::NamedTuple)
     s, a, r, t, s′ = (send_to_device(D, batch[x]) for x in SARTS)
     a = CartesianIndex.(repeat(batch.action, inner = N), 1:(N*batch_size))
 
-    target_q = reshape(Qₜ(s′), :, N, batch_size)
-    avg_q = mean(target_q, dims=2)
+    target_q = reshape(Qₜ(s′), N, :, batch_size)
+    avg_q = mean(target_q, dims=1)
 
     if haskey(batch, :next_legal_actions_mask)
         l′ = send_to_device(D, batch[:next_legal_actions_mask])
         avg_q .+= ifelse.(l′, 0.0f0, typemin(Float32))
     end
 
-    aₜ = argmax(avg_q, dims=1)
-    aₜ = aₜ .+ typeof(aₜ)(CartesianIndices((0:0, 0:N-1, 0:0)))
+    aₜ = argmax(avg_q, dims=2)
+    aₜ = aₜ .+ typeof(aₜ)(CartesianIndices((0:N-1, 0:0, 0:0)))
     qₜ = reshape(target_q[aₜ], :, batch_size)
     target =
     reshape(r, 1, batch_size) .+ γ * reshape(1 .- t, 1, batch_size) .* qₜ
@@ -137,21 +154,12 @@ function RLBase.update!(learner::QRDQNLearner, batch::NamedTuple)
         target = reshape(target, N, 1, batch_size)
         q = reshape(q, 1, N, batch_size)
 
-        TD_error = (target .- q)
-        temp = Zygote.dropgrad(abs.(TD_error) .<  κ)
-        element_wise_huber_loss = ((TD_error.^2) .* temp) + κ*(TD_error .- 0.5*κ) .* (1 .- temp)
+        loss = quantile_huber_loss(target, q, κ, τ, N)
 
-        # dropgrad
-        element_wise_huber_loss =
-            abs.(reshape(τ, 1, N) .- Zygote.dropgrad(TD_error .< 0)) .*
-            element_wise_huber_loss ./ κ
-        batch_quantile_huber_loss = mean(sum(element_wise_huber_loss; dims = 1), dims=1)
-        quantile_huber_loss =
-            mean(batch_quantile_huber_loss)
         ignore() do
-            learner.loss = quantile_huber_loss
+            learner.loss = loss
         end
-        quantile_huber_loss
+        loss
     end
 
     update!(Q, gs)
