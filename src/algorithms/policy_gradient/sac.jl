@@ -52,6 +52,8 @@ end
 `policy` is expected to output a tuple `(μ, logσ)` of mean and
 log standard deviations for the desired action distributions, this
 can be implemented using a `GaussianNetwork` in a `NeuralNetworkApproximator`.
+
+Implemented based on http://arxiv.org/abs/1812.05905
 """
 function SACPolicy(;
     policy,
@@ -133,7 +135,6 @@ function RLBase.update!(
 )
     length(traj) > p.update_after || return
     p.step % p.update_every == 0 || return
-    # Maybe add option to run this `batch_updates` number of times?
     inds, batch = sample(p.rng, traj, BatchSampler{SARTS}(p.batch_size))
     update!(p, batch)
 end
