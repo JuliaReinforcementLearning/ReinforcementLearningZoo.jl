@@ -17,7 +17,7 @@ mutable struct QRDQNLearner{
     quantile_num::Int
     rng::R
     κ::Float32
-    τ::Vector{Float64}
+    τ::AbstractArray
     loss::Float32
 end
 
@@ -67,9 +67,12 @@ function QRDQNLearner(;
         stack_size = stack_size,
         batch_size = batch_size,
     )
+
     N = quantile_num
     τ = collect(0:N+1)/N
     τ  = (τ[2:N+1]+τ[1:N])/2
+    τ = reshape(τ, 1, N)
+
     QRDQNLearner(
         approximator,
         target_approximator,
@@ -97,18 +100,18 @@ end
 function (learner::QRDQNLearner)(env)
     s = send_to_device(device(learner.approximator), state(env))
     s = Flux.unsqueeze(s, ndims(s) + 1)
-    q = reshape(learner.approximator(s), :, learner.quantile_num)
-    vec(mean(q, dims = 2)) |> send_to_host
+    q = reshape(learner.approximator(s), learner.quantile_num, :)
+    vec(mean(q, dims = 1)) |> send_to_host
 end
 
-function quantile_huber_loss(target::AbstractArray, q::AbstractArray, κ::Float32, τ::Vector{Float64}, N::Int)
+function quantile_huber_loss(target::AbstractArray, q::AbstractArray, κ::Float32, τ::AbstractArray, N::Int)
     TD_error = (target .- q)
 
     # dropgrad
     temp = Zygote.dropgrad(abs.(TD_error) .<  κ)
     element_wise_huber_loss = ((TD_error.^2) .* temp) + κ*(TD_error .- 0.5*κ) .* (1 .- temp)
     element_wise_huber_loss =
-        abs.(reshape(τ, 1, N) .- Zygote.dropgrad(TD_error .< 0)) .*
+        abs.(τ .- Zygote.dropgrad(TD_error .< 0)) .*
         element_wise_huber_loss ./ κ
 
     batch_quantile_huber_loss = mean(sum(element_wise_huber_loss; dims = 1), dims=1)
