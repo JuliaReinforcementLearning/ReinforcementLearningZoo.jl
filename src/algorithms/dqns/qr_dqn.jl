@@ -146,7 +146,7 @@ function RLBase.update!(learner::QRDQNLearner, batch::NamedTuple)
 
     aₜ = argmax(avg_q, dims=2)
     aₜ = aₜ .+ typeof(aₜ)(CartesianIndices((0:N-1, 0:0, 0:0)))
-    qₜ = reshape(target_q[aₜ], :, batch_size)
+    qₜ = reshape(view(target_q, aₜ), :, batch_size)
     target =
     reshape(r, 1, batch_size) .+ γ * reshape(1 .- t, 1, batch_size) .* qₜ
 
