@@ -1,23 +1,30 @@
-export QRDQNLearner
+export QRDQNLearner, quantile_huber_loss
 
-mutable struct QRDQNLearner{
-    Tq<:AbstractApproximator,
-    Tt<:AbstractApproximator,
-    Tf,
-    R<:AbstractRNG,
-} <: AbstractLearner
+function quantile_huber_loss(ŷ, y; κ=1.0f0)
+    N, B = size(y)
+    Δ = reshape(y, N, 1, B) .- reshape(ŷ, 1, N, B)
+    abs_error = abs.(Δ)
+    quadratic = min.(abs_error, κ)
+    linear = abs_error .- quadratic
+    huber_loss = 0.5f0 .* quadratic .* quadratic .+ κ .* linear
+
+    cum_prob = send_to_device(device(y), range(0.5f0 / N; length=N, step=1.0f0 / N))
+    loss = Zygote.dropgrad(abs.(cum_prob .- (Δ .< 0))) .* huber_loss
+    mean(sum(loss;dims=1))
+end
+
+mutable struct QRDQNLearner{Tq <: AbstractApproximator,Tt <: AbstractApproximator,Tf,R} <: AbstractLearner
     approximator::Tq
     target_approximator::Tt
-    loss_func::Tf
     min_replay_history::Int
     update_freq::Int
     update_step::Int
     target_update_freq::Int
     sampler::NStepBatchSampler
-    quantile_num::Int
+    n_quantile::Int
+    loss_func::Tf
     rng::R
-    κ::Float32
-    τ::AbstractArray
+    # for recording
     loss::Float32
 end
 
@@ -28,64 +35,56 @@ See paper: [Distributional Reinforcement Learning with Quantile Regression](http
 
 # Keywords
 
-- `approximator`::[`AbstractApproximator`](@ref): used to get Q-values of a state.
-- `target_approximator`::[`AbstractApproximator`](@ref): similar to `approximator`, but used to estimate the target (the next state).
-- `loss_func`: the loss function.
+- `approximator`::[`AbstractApproximator`](@ref): used to get quantile-values of a batch of states. The output should be of size `(n_quantile, n_action)`.
+- `target_approximator`::[`AbstractApproximator`](@ref): similar to `approximator`, but used to estimate the quantile values of the next state batch.
 - `γ::Float32=0.99f0`: discount rate.
 - `batch_size::Int=32`
 - `update_horizon::Int=1`: length of update ('n' in n-step update).
 - `min_replay_history::Int=32`: number of transitions that should be experienced before updating the `approximator`.
-- `update_freq::Int=4`: the frequency of updating the `approximator`.
-- `quantile_num::Int=1`: the number of quantile approximators.
+- `update_freq::Int=1`: the frequency of updating the `approximator`.
+- `n_quantile::Int=1`: the number of quantiles.
 - `target_update_freq::Int=100`: the frequency of syncing `target_approximator`.
 - `stack_size::Union{Int, Nothing}=4`: use the recent `stack_size` frames to form a stacked state.
 - `traces = SARTS`, set to `SLARTSL` if you are to apply to an environment of `FULL_ACTION_SET`.
-- `κ = Float32`, κ in quantile_huber_loss set to 1.0f0.
-- `rng = Random.GLOBAL_RNG`
+- `loss_func`=[`quantile_huber_loss`](@ref).
 """
 function QRDQNLearner(;
-    approximator::Tq,
-    target_approximator::Tt,
-    loss_func::Tf,
-    stack_size::Union{Int,Nothing} = nothing,
-    γ::Float32 = 0.99f0,
-    batch_size::Int = 32,
-    update_horizon::Int = 1,
-    min_replay_history::Int = 32,
-    update_freq::Int = 1,
-    quantile_num::Int = 1,
-    target_update_freq::Int = 100,
-    traces = SARTS,
-    update_step = 0,
-    κ::Float32 = 1.0f0,
-    rng = Random.GLOBAL_RNG,
-) where {Tq,Tt,Tf}
+    approximator,
+    target_approximator,
+    stack_size::Union{Int,Nothing}=nothing,
+    γ::Float32=0.99f0,
+    batch_size::Int=32,
+    update_horizon::Int=1,
+    min_replay_history::Int=32,
+    update_freq::Int=1,
+    n_quantile::Int=1,
+    target_update_freq::Int=100,
+    traces=SARTS,
+    update_step=0,
+    loss_func=quantile_huber_loss,
+    rng=Random.GLOBAL_RNG
+)
     copyto!(approximator, target_approximator)
     sampler = NStepBatchSampler{traces}(;
-        γ = γ,
-        n = update_horizon,
-        stack_size = stack_size,
-        batch_size = batch_size,
+        γ=γ,
+        n=update_horizon,
+        stack_size=stack_size,
+        batch_size=batch_size,
     )
 
-    N = quantile_num
-    τ = collect(0:N+1)/N
-    τ  = (τ[2:N+1]+τ[1:N])/2
-    τ = reshape(τ, 1, N)
+    N = n_quantile
 
     QRDQNLearner(
         approximator,
         target_approximator,
-        loss_func,
         min_replay_history,
         update_freq,
         update_step,
         target_update_freq,
         sampler,
         N,
+        loss_func,
         rng,
-        κ,
-        τ,
         0.0f0,
     )
 end
@@ -100,64 +99,34 @@ end
 function (learner::QRDQNLearner)(env)
     s = send_to_device(device(learner.approximator), state(env))
     s = Flux.unsqueeze(s, ndims(s) + 1)
-    q = reshape(learner.approximator(s), learner.quantile_num, :)
-    vec(mean(q, dims = 1)) |> send_to_host
+    q = reshape(learner.approximator(s), learner.n_quantile, :)
+    vec(mean(q, dims=1)) |> send_to_host
 end
-
-function quantile_huber_loss(target::AbstractArray, q::AbstractArray, κ::Float32, τ::AbstractArray, N::Int)
-    TD_error = (target .- q)
-
-    # dropgrad
-    temp = Zygote.dropgrad(abs.(TD_error) .<  κ)
-    element_wise_huber_loss = ((TD_error.^2) .* temp) + κ*(TD_error .- 0.5*κ) .* (1 .- temp)
-    element_wise_huber_loss =
-        abs.(τ .- Zygote.dropgrad(TD_error .< 0)) .*
-        element_wise_huber_loss ./ κ
-
-    batch_quantile_huber_loss = mean(sum(element_wise_huber_loss; dims = 1), dims=1)
-    quantile_huber_loss =
-        mean(batch_quantile_huber_loss)
-
-    quantile_huber_loss
-    end
 
 function RLBase.update!(learner::QRDQNLearner, batch::NamedTuple)
     Q = learner.approximator
     Qₜ = learner.target_approximator
     γ = learner.sampler.γ
-    loss_func = learner.loss_func
     n = learner.sampler.n
     batch_size = learner.sampler.batch_size
-    N = learner.quantile_num
-    κ = learner.κ
-    τ = learner.τ
+    N = learner.n_quantile
     D = device(Q)
+    loss_func = learner.loss_func
 
     s, a, r, t, s′ = (send_to_device(D, batch[x]) for x in SARTS)
-    a = CartesianIndex.(repeat(batch.action, inner = N), 1:(N*batch_size))
+    a = CartesianIndex.(a, 1:batch_size)
 
-    target_q = reshape(Qₜ(s′), N, :, batch_size)
-    avg_q = mean(target_q, dims=1)
-
-    if haskey(batch, :next_legal_actions_mask)
-        l′ = send_to_device(D, batch[:next_legal_actions_mask])
-        avg_q .+= ifelse.(l′, 0.0f0, typemin(Float32))
-    end
-
-    aₜ = argmax(avg_q, dims=2)
-    aₜ = aₜ .+ typeof(aₜ)(CartesianIndices((0:N-1, 0:0, 0:0)))
-    qₜ = reshape(view(target_q, aₜ), :, batch_size)
-    target =
-    reshape(r, 1, batch_size) .+ γ * reshape(1 .- t, 1, batch_size) .* qₜ
+    target_quantiles = reshape(Qₜ(s′), N, :, batch_size)
+    qₜ = dropdims(mean(target_quantiles; dims=1); dims=1)
+    aₜ = dropdims(argmax(qₜ, dims=1); dims=1)
+    @views target_quantile_aₜ = target_quantiles[:, aₜ]
+    y = reshape(r, 1, batch_size) .+ γ .* reshape(1 .- t, 1, batch_size) .* target_quantile_aₜ
 
     gs = gradient(params(Q)) do
-        q = reshape(Q(s), :, N*batch_size)
-        q = q[a]
+        q = reshape(Q(s), N, :, batch_size)
+        @views ŷ = q[:, a]
 
-        target = reshape(target, N, 1, batch_size)
-        q = reshape(q, 1, N, batch_size)
-
-        loss = quantile_huber_loss(target, q, κ, τ, N)
+        loss = loss_func(ŷ, y)
 
         ignore() do
             learner.loss = loss
