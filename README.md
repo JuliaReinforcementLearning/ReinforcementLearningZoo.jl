@@ -11,6 +11,7 @@
   </a>
 </p>
 
+⚠️ This package is moved into [ReinforcementLearning.jl](https://github.com/JuliaReinforcementLearning/ReinforcementLearning.jl) (2021-05-06)
 
 This project aims to provide some implementations of the most typical reinforcement learning algorithms.
 
